@@ -1,0 +1,6 @@
+import{c as y,h as l,r as a,g as p,i as g,t as s}from"./index-Ptv1Z4Gq.js";import{u as f}from"./useQuery-DMaZAUph.js";/**
+ * @license lucide-react v0.460.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const w=y("Globe",[["circle",{cx:"12",cy:"12",r:"10",key:"1mglay"}],["path",{d:"M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20",key:"13o1zl"}],["path",{d:"M2 12h20",key:"9i4pu4"}]]);function C(){const n=l(),[i,u]=a.useState(null),r=f({queryKey:["tracker","connections"],queryFn:s.getConnections});a.useEffect(()=>{const t=p(),c=e=>{u(e.connection),n.setQueryData(["tracker","connections"],o=>o?[e.connection,...o]:[e.connection])};return t.on("tracker:new_connection",c),()=>{t.off("tracker:new_connection",c)}},[n]);const k=g({mutationFn:s.toggleBlock,onMutate:async t=>{await n.cancelQueries({queryKey:["tracker","connections"]});const c=n.getQueryData(["tracker","connections"]);return n.setQueryData(["tracker","connections"],e=>(e==null?void 0:e.map(o=>o.id===t.connectionId?{...o,isBlocked:t.blocked}:o))??[]),{prev:c}},onError:(t,c,e)=>{e!=null&&e.prev&&n.setQueryData(["tracker","connections"],e.prev)}});return{connections:r.data??[],isLoading:r.isLoading,newConnection:i,toggleBlock:k.mutate}}export{w as G,C as u};
