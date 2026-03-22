@@ -19,9 +19,9 @@ const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const ScanEngine = lazy(() => import('@/pages/ScanEngine'))
 const BehavioralDNA = lazy(() => import('@/pages/BehavioralDNA'))
 const TrackerMap = lazy(() => import('@/pages/TrackerMap'))
-const SocialShield = lazy(() => import('@/pages/SocialShield'))
+// SocialShield removed — feature now lives inside Scan Engine's Social Engineering tab
 const AndroidSEC = lazy(() => import('@/pages/AndroidSEC'))
-const Community = lazy(() => import('@/pages/Community'))
+const RootxAI = lazy(() => import('@/pages/RootxAI'))
 const Settings = lazy(() => import('@/pages/Settings'))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
@@ -46,6 +46,8 @@ export default function App() {
                     const response = await api.get('/auth/me')
                     setUser(response.data)
                     setAccessToken(storedToken)
+                    // CRITICAL: Must set isAuthenticated = true!
+                    useAuthStore.setState({ isAuthenticated: true })
                     setLoading(false)
                 } catch (err) {
                     try {
@@ -55,6 +57,7 @@ export default function App() {
                         api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`
                         setUser(JSON.parse(storedUserStr))
                         setAccessToken(newToken)
+                        useAuthStore.setState({ isAuthenticated: true })
                         setLoading(false)
                     } catch {
                         localStorage.removeItem('safeopen_token')
@@ -137,14 +140,7 @@ export default function App() {
                                     </SuspenseWrapper>
                                 }
                             />
-                            <Route
-                                path="/social-shield"
-                                element={
-                                    <SuspenseWrapper>
-                                        <SocialShield />
-                                    </SuspenseWrapper>
-                                }
-                            />
+
                             <Route
                                 path="/android-sec"
                                 element={
@@ -154,10 +150,10 @@ export default function App() {
                                 }
                             />
                             <Route
-                                path="/community"
+                                path="/rootx-ai"
                                 element={
                                     <SuspenseWrapper>
-                                        <Community />
+                                        <RootxAI />
                                     </SuspenseWrapper>
                                 }
                             />

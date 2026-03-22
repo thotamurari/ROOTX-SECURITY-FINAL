@@ -21,6 +21,10 @@ import fetch from 'node-fetch'
 const router = Router()
 router.use(authMiddleware)
 
+// Mount APK scanner sub-routes at /scan/apk/*
+import apkRoutes from '../services/scan/routes/apk.routes.js'
+router.use('/apk', apkRoutes)
+
 const upload = multer({
     dest: 'uploads/',
     limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
@@ -137,16 +141,19 @@ router.post('/url', async (req: AuthRequest, res: Response) => {
             riskScore += 50
             indicators.push({ name: 'VirusTotal Detection', severity: 'critical', description: `${maliciousCount}/${totalVendors} security vendors flagged as malicious` })
         } else if (maliciousCount >= 5) {
-            riskScore += 40
+            riskScore += 45
             indicators.push({ name: 'VirusTotal Detection', severity: 'critical', description: `${maliciousCount}/${totalVendors} vendors flagged malicious: ${maliciousVendors.slice(0,3).join(', ')}` })
-        } else if (maliciousCount >= 2) {
-            riskScore += 30
+        } else if (maliciousCount >= 3) {
+            riskScore += 35
             indicators.push({ name: 'VirusTotal Detection', severity: 'high', description: `${maliciousCount}/${totalVendors} vendors flagged malicious` })
-        } else if (maliciousCount === 1) {
-            riskScore += 20
-            indicators.push({ name: 'VirusTotal Detection', severity: 'medium', description: `1 vendor flagged as malicious: ${maliciousVendors[0]}` })
+        } else if (maliciousCount >= 1) {
+            riskScore += 22
+            indicators.push({ name: 'VirusTotal Detection', severity: 'medium', description: `${maliciousCount} vendor(s) flagged as malicious: ${maliciousVendors.slice(0,2).join(', ')}` })
+        } else if (suspiciousCount >= 3) {
+            riskScore += 18
+            indicators.push({ name: 'VirusTotal Suspicious', severity: 'medium', description: `${suspiciousCount} vendors flagged as suspicious` })
         } else if (suspiciousCount >= 1) {
-            riskScore += 15
+            riskScore += 10
             indicators.push({ name: 'VirusTotal Suspicious', severity: 'medium', description: `${suspiciousCount} vendors flagged as suspicious` })
         } else if (maliciousCount === 0 && vt) {
             indicators.push({ name: 'VirusTotal', severity: 'low', description: `Clean — 0/${totalVendors} vendors flagged` })
@@ -158,11 +165,14 @@ router.post('/url', async (req: AuthRequest, res: Response) => {
                 riskScore += 25
                 indicators.push({ name: 'AbuseIPDB', severity: 'critical', description: `IP has ${abuseScore}% abuse confidence score` })
             } else if (abuseScore >= 50) {
-                riskScore += 15
+                riskScore += 18
                 indicators.push({ name: 'AbuseIPDB', severity: 'high', description: `IP has ${abuseScore}% abuse confidence score` })
             } else if (abuseScore >= 20) {
-                riskScore += 8
+                riskScore += 10
                 indicators.push({ name: 'AbuseIPDB', severity: 'medium', description: `IP has ${abuseScore}% abuse confidence score` })
+            } else if (abuseScore >= 5) {
+                riskScore += 4
+                indicators.push({ name: 'AbuseIPDB', severity: 'low', description: `IP has ${abuseScore}% abuse confidence score` })
             } else {
                 indicators.push({ name: 'AbuseIPDB', severity: 'low', description: `IP reputation clean — ${abuseScore}% abuse score` })
             }
@@ -204,7 +214,7 @@ router.post('/url', async (req: AuthRequest, res: Response) => {
         }
 
         riskScore = Math.min(100, riskScore)
-        const threatLevel = riskScore >= 86 ? 'critical' : riskScore >= 61 ? 'danger' : riskScore >= 31 ? 'caution' : 'safe'
+        const threatLevel = riskScore >= 80 ? 'critical' : riskScore >= 55 ? 'danger' : riskScore >= 25 ? 'caution' : 'safe'
 
         emitProgress(80, 'Anthropic AI Analysis...')
 
@@ -278,7 +288,7 @@ router.post('/url', async (req: AuthRequest, res: Response) => {
         io.to(`user:${req.userId}`).emit('scan:complete', { result: scan })
 
         // Automatically delete older scans exceeding the 5 item limit
-        await enforceScanLimit(req.userId)
+        await enforceScanLimit(req.userId!)
 
         logger.info('URL scan completed', { userId: req.userId, url, riskScore, duration: scanDuration })
         res.json(scan)
@@ -307,7 +317,7 @@ router.post('/file', upload.single('file'), async (req: AuthRequest, res: Respon
 
         io.to(`user:${req.userId}`).emit('scan:progress', { scanId: fileName, progress: 80, stage: 'Calculating risk...' })
         const riskScore = vtResult.malicious ? Math.min(90, vtResult.positives * 5 + 30) : 10
-        const threatLevel = riskScore >= 86 ? 'critical' : riskScore >= 61 ? 'danger' : riskScore >= 31 ? 'caution' : 'safe'
+        const threatLevel = riskScore >= 80 ? 'critical' : riskScore >= 55 ? 'danger' : riskScore >= 25 ? 'caution' : 'safe'
 
         const indicators = vtResult.malicious ? [{ name: 'VirusTotal', severity: 'high', description: vtResult.details[0] || 'Malicious file detected' }] : []
         fs.unlinkSync(filePath)
@@ -327,7 +337,7 @@ router.post('/file', upload.single('file'), async (req: AuthRequest, res: Respon
         io.to(`user:${req.userId}`).emit('scan:complete', { result: scan })
         
         // Truncate to 5 recent scans
-        await enforceScanLimit(req.userId)
+        await enforceScanLimit(req.userId!)
         
         res.json(scan)
     } catch {
@@ -352,7 +362,7 @@ router.post('/message', async (req: AuthRequest, res: Response) => {
         io.to(`user:${req.userId}`).emit('scan:progress', { scanId: inputHash, progress: 80, stage: 'Calculating risk...' })
 
         const riskScore = aiResult.overallRisk
-        const threatLevel = riskScore >= 86 ? 'critical' : riskScore >= 61 ? 'danger' : riskScore >= 31 ? 'caution' : 'safe'
+        const threatLevel = riskScore >= 80 ? 'critical' : riskScore >= 55 ? 'danger' : riskScore >= 25 ? 'caution' : 'safe'
 
         const indicators = []
         if (aiResult.urgencyScore > 60) indicators.push({ name: 'Urgency Tactics', severity: 'high', description: `Urgency score: ${aiResult.urgencyScore}/100` })
@@ -374,7 +384,7 @@ router.post('/message', async (req: AuthRequest, res: Response) => {
         io.to(`user:${req.userId}`).emit('scan:complete', { result: scan })
         
         // Truncate to 5 recent scans
-        await enforceScanLimit(req.userId)
+        await enforceScanLimit(req.userId!)
 
         res.json(scan)
     } catch {

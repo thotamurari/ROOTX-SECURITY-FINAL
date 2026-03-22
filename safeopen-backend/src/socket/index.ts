@@ -7,9 +7,10 @@ import logger from '../utils/logger.js'
 let io: Server
 
 export function initSocket(httpServer: HTTPServer): Server {
+    const allowedOrigins = config.frontendUrl.split(',').map(u => u.trim())
     io = new Server(httpServer, {
         cors: {
-            origin: config.frontendUrl,
+            origin: allowedOrigins,
             credentials: true,
         },
         pingTimeout: 60000,
@@ -56,6 +57,14 @@ export function initSocket(httpServer: HTTPServer): Server {
 
         socket.on('disconnect', (reason) => {
             logger.info('Socket disconnected', { userId, reason })
+        })
+
+        // APK scan cancellation via WebSocket
+        socket.on('apk:stop:scan' as any, (data: { jobId: string }) => {
+            if (data?.jobId) {
+                import('../services/scan/queues/apkScan.queue.js').then(m => m.cancelApkScanJob(data.jobId))
+                logger.info('APK scan cancel requested via socket', { userId, jobId: data.jobId })
+            }
         })
 
         socket.on('error', (error) => {

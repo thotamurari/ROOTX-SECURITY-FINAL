@@ -60,10 +60,10 @@ export const checkAbuseIPDB = async (domain: string) => {
 }
 
 // 3. Domain Age
-export const checkDomainAge = async (domain: string) => {
+export const checkDomainAge = async (domain: string): Promise<Record<string, any> | null> => {
     try {
         const result = await whois(domain)
-        return result
+        return result as Record<string, any>
     } catch {
         return null
     }

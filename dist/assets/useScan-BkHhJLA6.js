@@ -1,0 +1,6 @@
+import{c as E,r as a,h as d,i as c,s as r}from"./index-BZoX4k-A.js";import{u as k}from"./useQuery-BkepmJGS.js";/**
+ * @license lucide-react v0.460.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const H=E("MessageSquare",[["path",{d:"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",key:"1lielz"}]]);function I(){const[f,n]=a.useState(0),[S,u]=a.useState(""),[M,e]=a.useState(!1),[m,t]=a.useState(null);a.useEffect(()=>{const s=d(),i=o=>{n(o.progress),u(o.stage)},g=o=>{t(o.result),e(!1),n(100)};return s.on("scan:progress",i),s.on("scan:complete",g),()=>{s.off("scan:progress",i),s.off("scan:complete",g)}},[]);const p=c({mutationFn:r.scanUrl,onMutate:()=>{e(!0),n(0),t(null)},onSuccess:s=>{t(s),e(!1)},onError:()=>{e(!1)}}),y=c({mutationFn:r.scanFile,onMutate:()=>{e(!0),n(0),t(null)},onSuccess:s=>{t(s),e(!1)},onError:()=>{e(!1)}}),F=c({mutationFn:s=>r.scanMessage({message:s}),onMutate:()=>{e(!0),n(0),t(null)},onSuccess:s=>{t(s),e(!1)},onError:()=>{e(!1)}}),l=k({queryKey:["scan","history"],queryFn:()=>r.getHistory()}),h=a.useCallback(()=>{n(0),u(""),e(!1),t(null)},[]);return{progress:f,stage:S,isScanning:M,currentResult:m,scanUrl:p.mutate,scanFile:y.mutate,scanMessage:F.mutate,history:l.data,isLoadingHistory:l.isLoading,resetScan:h}}export{H as M,I as u};

@@ -16,7 +16,9 @@ import authRoutes from './routes/auth.routes.js'
 import scanRoutes from './routes/scan.routes.js'
 import behaviorRoutes from './routes/behavior.routes.js'
 import trackerRoutes from './routes/tracker.routes.js'
-import communityRoutes from './routes/community.routes.js'
+import rootxAiRoutes from './routes/rootx-ai.routes.js'
+import deviceRoutes from './routes/device.routes.js'
+import mongoose from 'mongoose'
 
 async function bootstrap() {
     const app = express()
@@ -66,7 +68,8 @@ async function bootstrap() {
     app.use('/scan', scanRoutes)
     app.use('/behavior', behaviorRoutes)
     app.use('/tracker', trackerRoutes)
-    app.use('/community', communityRoutes)
+    app.use('/rootx-ai', rootxAiRoutes)
+    app.use('/device', deviceRoutes)
 
     // ─── Error Handling ────────────────
     app.use(notFoundHandler)
@@ -74,6 +77,11 @@ async function bootstrap() {
 
     // ─── Connect Services ────────────────
     await connectRedis()
+    if (process.env.MONGODB_URI) {
+        mongoose.connect(process.env.MONGODB_URI)
+            .then(() => logger.info('📦 Connected to MongoDB'))
+            .catch((err) => logger.error('❌ MongoDB connection error:', err))
+    }
 
     // ─── Socket.io ────────────────
     initSocket(server)
