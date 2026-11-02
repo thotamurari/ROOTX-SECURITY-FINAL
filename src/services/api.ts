@@ -1,8 +1,6 @@
 import api from './axios'
 import type {
     AuthResponse,
-    LoginRequest,
-    RegisterRequest,
     ScanResult,
     ScanUrlRequest,
     ScanMessageRequest,
@@ -17,24 +15,40 @@ import type {
     BlockRequest,
     PaginatedResponse,
     UserProfile,
+    DeviceSession,
 } from '@/types/api'
+import { getDeviceId, getDeviceName, getDevicePlatform } from '@/lib/deviceId'
 
 // ═══════════════ AUTH ═══════════════
+// Login/Register/Refresh are handled directly by Supabase on the frontend.
+// Only /me and /logout remain as backend API calls.
 export const authAPI = {
-    login: (data: LoginRequest) =>
-        api.post<AuthResponse>('/auth/login', data).then((r) => r.data),
-
-    register: (data: RegisterRequest) =>
-        api.post<AuthResponse>('/auth/register', data).then((r) => r.data),
-
-    refresh: () =>
-        api.post<AuthResponse>('/auth/refresh').then((r) => r.data),
+    getMe: () =>
+        api.get<UserProfile>('/auth/me').then((r) => r.data),
 
     logout: () =>
         api.post('/auth/logout').then((r) => r.data),
+}
 
-    getMe: () =>
-        api.get<UserProfile>('/auth/me').then((r) => r.data),
+// ═══════════════ DEVICE SESSIONS ═══════════════
+export const sessionsAPI = {
+    // Called once per sign-in (and on app start if already authenticated) —
+    // see the onAuthStateChanged listener in src/App.tsx.
+    registerCurrentDevice: () =>
+        api.post('/auth/sessions/register', {
+            deviceId: getDeviceId(),
+            deviceName: getDeviceName(),
+            platform: getDevicePlatform(),
+        }).then((r) => r.data),
+
+    list: () =>
+        api.get<{ sessions: DeviceSession[] }>('/auth/sessions').then((r) => r.data.sessions),
+
+    revoke: (id: string) =>
+        api.delete(`/auth/sessions/${id}`).then((r) => r.data),
+
+    revokeOthers: () =>
+        api.post('/auth/sessions/revoke-others').then((r) => r.data),
 }
 
 // ═══════════════ SCAN ═══════════════

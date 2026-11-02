@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "781934102806",
+    "project_id": "e-learning-18dcf",
+    "storage_bucket": "e-learning-18dcf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:781934102806:android:d43beb81e381695be42837",
+        "android_client_info": {
+          "package_name": "com.rootx.security"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfGp-JA31ECvluaJJmOCaXNPto3H3zgpo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

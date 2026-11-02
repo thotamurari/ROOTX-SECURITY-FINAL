@@ -3,6 +3,8 @@ import { useRiskScore } from '@/hooks/useRiskScore'
 
 interface Props {
     score: number
+    /** Maximum rendered diameter in px. The ring shrinks below this on
+     *  narrow viewports rather than overflowing its container. */
     size?: number
 }
 
@@ -14,21 +16,34 @@ export function ThreatLevelRing({ score, size = 200 }: Props) {
     const offset = circumference - (score / 100) * circumference
 
     return (
-        <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+        <div
+            className="relative w-full aspect-square flex items-center justify-center mx-auto"
+            style={{ maxWidth: size }}
+        >
             {/* Background ring */}
-            <svg className="absolute" width={size} height={size}>
+            <svg
+                className="absolute inset-0 w-full h-full"
+                viewBox={`0 0 ${size} ${size}`}
+                aria-hidden="true"
+                focusable="false"
+            >
                 <circle
                     cx={size / 2}
                     cy={size / 2}
                     r={radius}
                     fill="none"
-                    stroke="#1A2236"
+                    stroke="var(--bg-surface-3)"
                     strokeWidth={strokeWidth}
                 />
             </svg>
 
             {/* Animated progress ring */}
-            <svg className="absolute -rotate-90" width={size} height={size}>
+            <svg
+                className="absolute inset-0 w-full h-full -rotate-90"
+                viewBox={`0 0 ${size} ${size}`}
+                aria-hidden="true"
+                focusable="false"
+            >
                 <motion.circle
                     cx={size / 2}
                     cy={size / 2}
@@ -40,44 +55,49 @@ export function ThreatLevelRing({ score, size = 200 }: Props) {
                     strokeDasharray={circumference}
                     initial={{ strokeDashoffset: circumference }}
                     animate={{ strokeDashoffset: offset }}
-                    transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
-                    style={{ filter: `drop-shadow(0 0 16px ${risk.color})` }}
+                    transition={{ duration: 2, ease: [0.16, 1, 0.3, 1] }}
+                    style={{ filter: `drop-shadow(0 0 12px ${risk.color}33)` }}
                 />
             </svg>
 
-            {/* Glow pulse */}
+            {/* Soft live halo — kept subtle; this is a real-time threat readout */}
             <motion.div
-                className="absolute rounded-full"
+                className="absolute rounded-full pointer-events-none"
+                aria-hidden="true"
                 style={{
-                    width: size - 30,
-                    height: size - 30,
-                    background: `radial-gradient(circle, ${risk.color}08 0%, transparent 70%)`,
+                    width: '80%',
+                    height: '80%',
+                    background: `radial-gradient(circle, ${risk.color}10 0%, transparent 70%)`,
                 }}
-                animate={{ opacity: [0.5, 1, 0.5], scale: [0.95, 1.05, 0.95] }}
-                transition={{ duration: 3, repeat: Infinity }}
+                animate={{ opacity: [0.3, 0.55, 0.3], scale: [0.92, 1.06, 0.92] }}
+                transition={{ duration: 4, repeat: Infinity }}
             />
 
             {/* Score text */}
-            <div className="relative text-center">
-                <motion.p
-                    className="text-[56px] font-orbitron font-black leading-none"
-                    style={{
-                        color: risk.color,
-                        textShadow: `0 0 20px ${risk.color}CC, 0 0 40px ${risk.color}66, 0 0 80px ${risk.color}33`,
-                    }}
-                    initial={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, scale: 1 }}
+            <div className="relative text-center px-2">
+                <motion.div
+                    className="flex flex-col items-center justify-center"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5, duration: 0.5 }}
                 >
-                    {score}
-                </motion.p>
-                <div className="flex items-center justify-center gap-2 mt-2">
-                    <div className="w-2 h-2 rounded-full animate-blink" style={{ backgroundColor: risk.color, boxShadow: `0 0 8px ${risk.color}` }} />
-                    <p className="font-mono text-[14px] font-bold uppercase tracking-[4px]" style={{ color: risk.color, textShadow: `0 0 10px ${risk.color}99` }}>
-                        {risk.label}
-                    </p>
-                </div>
+                    <span className="text-[44px] sm:text-[56px] font-bold leading-none tracking-tighter text-text-primary tabular-nums">
+                        {score}
+                    </span>
+                    <div className="flex items-center justify-center gap-2 mt-2">
+                        <span
+                            className="w-1.5 h-1.5 rounded-full animate-pulse"
+                            style={{ backgroundColor: risk.color }}
+                            aria-hidden="true"
+                        />
+                        <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.22em] text-text-secondary">
+                            {risk.label}
+                        </p>
+                    </div>
+                </motion.div>
             </div>
+
+            <span className="sr-only">Threat level {risk.label}, score {score} out of 100</span>
         </div>
     )
 }

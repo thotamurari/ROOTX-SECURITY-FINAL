@@ -1,25 +1,34 @@
 import { Smartphone, Battery, HardDrive, ShieldAlert, Activity } from 'lucide-react'
 
 const chips = [
-    { icon: Smartphone, label: 'Samsung A52', color: '#00F5FF' },
-    { icon: Battery, label: '84% health', color: '#00FF88' },
-    { icon: HardDrive, label: '30GB free', color: '#8888AA' },
-    { icon: ShieldAlert, label: '4 risky apps', color: '#FF8C00' },
-    { icon: Activity, label: '12 background', color: '#FF3366' },
+    { icon: Smartphone, label: 'Samsung A52', tone: 'text-accent' },
+    { icon: Battery, label: '84% health', tone: 'text-success' },
+    { icon: HardDrive, label: '30GB free', tone: 'text-text-tertiary' },
+    { icon: ShieldAlert, label: '4 risky apps', tone: 'text-warning' },
+    { icon: Activity, label: '12 background', tone: 'text-danger' },
 ]
 
 export function DeviceContextBar() {
     return (
         <div
-            className="flex items-center gap-3 px-4 py-2.5 overflow-x-auto bg-[#0D0D14] border-b border-[#1E1E30]"
+            className="flex items-center gap-2 px-4 py-2 overflow-x-auto bg-surface-1 border-b border-border"
             style={{ scrollbarWidth: 'none' }}
+            aria-label="Device context"
         >
-            {chips.map((chip) => (
-                <div key={chip.label} className="flex items-center gap-1.5 flex-shrink-0">
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: chip.color }} />
-                    <span className="font-sans text-[11px] text-[#8888AA] whitespace-nowrap">{chip.label}</span>
-                </div>
-            ))}
+            {chips.map((chip) => {
+                const Icon = chip.icon
+                return (
+                    <div
+                        key={chip.label}
+                        className="flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1 rounded-full bg-surface-2 border border-border"
+                    >
+                        <Icon className={`w-3 h-3 ${chip.tone}`} aria-hidden="true" />
+                        <span className="font-sans text-[11.5px] text-text-secondary whitespace-nowrap">
+                            {chip.label}
+                        </span>
+                    </div>
+                )
+            })}
         </div>
     )
 }

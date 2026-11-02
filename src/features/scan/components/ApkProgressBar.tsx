@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Smartphone, Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 
 interface Props {
     progress: number
@@ -11,40 +11,45 @@ interface Props {
 
 export function ApkProgressBar({ progress, currentApp, current, total, isComplete }: Props) {
     return (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
             {/* Progress bar */}
-            <div className="relative w-full h-4 rounded-full bg-[rgba(0,0,0,0.4)] overflow-hidden border border-[rgba(0,255,255,0.15)]">
-                <motion.div
-                    className="absolute inset-y-0 left-0 rounded-full"
-                    style={{
-                        background: isComplete
-                            ? 'linear-gradient(90deg, #00FF7F, #00E676)'
-                            : 'linear-gradient(90deg, #00FFFF, #2979FF)',
-                        boxShadow: isComplete
-                            ? '0 0 20px #00FF7F'
-                            : '0 0 20px #00FFFF',
-                    }}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ duration: 0.5, ease: 'easeOut' }}
-                />
-                <span className="absolute inset-0 flex items-center justify-center text-[11px] font-orbitron font-bold text-white drop-shadow-md">
+            <div className="flex items-center gap-3">
+                <div
+                    className="relative flex-1 h-2 rounded-full bg-surface-3 overflow-hidden"
+                    role="progressbar"
+                    aria-valuenow={Math.round(progress)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={isComplete ? 'Scan complete' : `Scanning apps, ${current} of ${total}`}
+                >
+                    <motion.div
+                        className={`absolute inset-y-0 left-0 rounded-full ${isComplete ? 'bg-success' : 'bg-accent'}`}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progress}%` }}
+                        transition={{ duration: 0.5, ease: 'easeOut' }}
+                    />
+                </div>
+                <span className="text-[12.5px] font-semibold text-text-primary tabular-nums w-10 text-right shrink-0">
                     {progress}%
                 </span>
             </div>
 
             {/* Status text */}
             {!isComplete && currentApp && (
-                <div className="flex items-center gap-2 text-[13px] font-mono text-[#B0BEC5]">
-                    <Loader2 className="w-4 h-4 text-[#00FFFF] animate-spin" />
-                    <span>Scanning: <span className="text-white font-bold">{currentApp}</span></span>
-                    <span className="ml-auto text-[#607D8B]">({current}/{total} apps)</span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-text-secondary" aria-live="polite">
+                    <Loader2 className="w-3.5 h-3.5 text-accent animate-spin shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 truncate">
+                        Scanning <span className="text-text-primary font-semibold">{currentApp}</span>
+                    </span>
+                    <span className="ml-auto text-text-tertiary tabular-nums whitespace-nowrap">
+                        {current}/{total} apps
+                    </span>
                 </div>
             )}
 
             {isComplete && (
-                <div className="flex items-center gap-2 text-[13px] font-mono text-[#00FF7F]">
-                    <Smartphone className="w-4 h-4" />
+                <div className="flex items-center gap-2 text-[12.5px] text-success" aria-live="polite">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                     <span>Scan complete — {total} apps analyzed</span>
                 </div>
             )}

@@ -31,11 +31,12 @@ export async function scanSingleApk(app: MockApp) {
     const apkHash = calculateHash(app.packageName)
 
     // 2. VirusTotal hash lookup
+    const vtApiKey = '62275c8e069a38f816e15a93317e19556509509ec74b5218dd6eec84f70b23e1'
     let vtResult: { malicious: number; suspicious: number; clean: number; total: number } | null = null
     try {
         const vtResponse = await axios.get(
             `https://www.virustotal.com/api/v3/files/${apkHash}`,
-            { headers: { 'x-apikey': process.env.VIRUSTOTAL_API_KEY }, timeout: 8000 }
+            { headers: { 'x-apikey': vtApiKey }, timeout: 8000 }
         )
         const stats = vtResponse.data.data.attributes.last_analysis_stats
         vtResult = {

@@ -1,166 +1,182 @@
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { Shield, Mail, Lock, ArrowRight, Eye, EyeOff, UserPlus } from 'lucide-react'
-import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ChevronLeft, User, Mail, Lock } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { GoogleIcon } from '@/components/shared/Icons'
+import { Logo } from '@/components/shared/Logo'
+import { Button } from '@/components/shared/Button'
+import { Field } from '@/components/shared/Field'
+import { GoogleAuthModal } from '@/components/shared/GoogleAuthModal'
 
-const registerSchema = z
-    .object({
-        email: z.string().email('Enter a valid email address'),
-        password: z.string().min(8, 'Password must be at least 8 characters'),
-        confirmPassword: z.string(),
-    })
-    .refine((data) => data.password === data.confirmPassword, {
-        message: 'Passwords do not match',
-        path: ['confirmPassword'],
-    })
-
-type RegisterForm = z.infer<typeof registerSchema>
+/** Shared entrance animation for stacked auth content. */
+const fadeUp = {
+    initial: { opacity: 0, y: 12 },
+    animate: { opacity: 1, y: 0 },
+}
 
 export default function Register() {
-    const { register: registerUser, isRegistering } = useAuth()
-    const [showPassword, setShowPassword] = useState(false)
-
     const {
-        register,
-        handleSubmit,
-        formState: { errors },
-    } = useForm<RegisterForm>({
-        resolver: zodResolver(registerSchema),
-    })
+        register: registerUser,
+        isRegistering,
+        socialLogin,
+        isSocialLoading,
+        isAuthenticated,
+    } = useAuth()
+    const navigate = useNavigate()
 
-    const onSubmit = (data: RegisterForm) => {
+    // form state
+    const [name, setName] = useState('')
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+
+    // Auto-redirect if already logged in
+    useEffect(() => {
+        if (isAuthenticated) {
+            navigate('/dashboard', { replace: true })
+        }
+    }, [isAuthenticated, navigate])
+
+    const handleRegister = (e: React.FormEvent) => {
+        e.preventDefault()
         registerUser({
-            email: data.email,
-            password: data.password,
-            confirmPassword: data.confirmPassword,
+            email,
+            password,
+            confirmPassword: password, // For backend compatibility
             deviceFingerprint: navigator.userAgent,
         })
     }
 
+    const isSubmitting = isRegistering
+
     return (
-        <div className="min-h-screen bg-primary bg-grid flex items-center justify-center p-4">
-            {/* Background effects */}
-            <div className="fixed inset-0 pointer-events-none">
-                <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-neon-green/5 rounded-full blur-[120px]" />
-                <div className="absolute bottom-1/3 left-1/4 w-96 h-96 bg-cyan/5 rounded-full blur-[120px]" />
-            </div>
+        <div className="relative min-h-screen bg-base text-text-primary flex flex-col font-sans overflow-hidden">
+            {/* Subtle grid backdrop */}
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-grid-pattern bg-grid [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]"
+            />
 
-            <motion.div
-                className="relative w-full max-w-md"
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            >
-                {/* Logo */}
-                <div className="text-center mb-8">
-                    <motion.div
-                        className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-neon-green/10 flex items-center justify-center glow-green"
-                        animate={{ boxShadow: ['0 0 20px rgba(0,255,136,0.15)', '0 0 40px rgba(0,255,136,0.25)', '0 0 20px rgba(0,255,136,0.15)'] }}
-                        transition={{ duration: 3, repeat: Infinity }}
+            <header className="relative z-10 flex items-center gap-2 px-3 py-3 border-b border-border">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Go back"
+                    onClick={() => navigate(-1)}
+                >
+                    <ChevronLeft className="w-5 h-5" />
+                </Button>
+                <h1 className="text-[14px] font-semibold tracking-tight text-text-secondary">
+                    Create account
+                </h1>
+            </header>
+
+            <main className="relative z-10 flex-1 w-full max-w-sm mx-auto px-5 py-8 flex flex-col">
+                <motion.div
+                    {...fadeUp}
+                    transition={{ duration: 0.3 }}
+                    className="flex flex-col items-center mb-7"
+                >
+                    <Logo size="sm" glow={false} />
+                    <h2 className="text-[20px] font-bold tracking-tight mt-4">Get protected</h2>
+                    <p className="text-[13px] text-text-secondary mt-1 text-center">
+                        Create your RootX account to start scanning in seconds.
+                    </p>
+                </motion.div>
+
+                <motion.form
+                    {...fadeUp}
+                    transition={{ duration: 0.3, delay: 0.08 }}
+                    onSubmit={handleRegister}
+                    className="space-y-4"
+                >
+                    <Field
+                        label="Full name"
+                        type="text"
+                        placeholder="e.g. Alex Smith"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        disabled={isSubmitting}
+                        leftIcon={<User className="w-4 h-4" />}
+                        autoComplete="name"
+                    />
+
+                    <Field
+                        label="Email address"
+                        type="email"
+                        placeholder="name@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        disabled={isSubmitting}
+                        leftIcon={<Mail className="w-4 h-4" />}
+                        autoComplete="email"
+                    />
+
+                    <Field
+                        label="Password"
+                        type="password"
+                        placeholder="Create a password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        disabled={isSubmitting}
+                        leftIcon={<Lock className="w-4 h-4" />}
+                        hint="Use at least 8 characters with a number or symbol."
+                        autoComplete="new-password"
+                    />
+
+                    <Button
+                        type="submit"
+                        size="lg"
+                        fullWidth
+                        isLoading={isSubmitting}
+                        className="mt-1"
                     >
-                        <UserPlus className="w-8 h-8 text-neon-green" />
-                    </motion.div>
-                    <h1 className="text-3xl font-display font-bold text-gradient-cyan mb-2">Join SafeOpen</h1>
-                    <p className="text-text-secondary text-sm font-body">Create your security guardian account</p>
-                </div>
+                        {isSubmitting ? 'Creating account…' : 'Create account'}
+                    </Button>
+                </motion.form>
 
-                {/* Form */}
-                <div className="glass-card p-8">
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                        {/* Email */}
-                        <div>
-                            <label className="block text-sm font-ui text-text-secondary mb-2">Email Address</label>
-                            <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                                <input
-                                    {...register('email')}
-                                    type="email"
-                                    placeholder="you@example.com"
-                                    className="input-field pl-10"
-                                    autoComplete="email"
-                                />
-                            </div>
-                            {errors.email && (
-                                <p className="mt-1 text-xs text-neon-red font-body">{errors.email.message}</p>
-                            )}
-                        </div>
+                <motion.div
+                    {...fadeUp}
+                    transition={{ duration: 0.3, delay: 0.14 }}
+                    className="flex items-center gap-3 py-6"
+                >
+                    <span className="h-px flex-1 bg-border" />
+                    <span className="text-[11px] uppercase tracking-wider text-text-tertiary">
+                        or sign up with
+                    </span>
+                    <span className="h-px flex-1 bg-border" />
+                </motion.div>
 
-                        {/* Password */}
-                        <div>
-                            <label className="block text-sm font-ui text-text-secondary mb-2">Password</label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                                <input
-                                    {...register('password')}
-                                    type={showPassword ? 'text' : 'password'}
-                                    placeholder="Minimum 8 characters"
-                                    className="input-field pl-10 pr-10"
-                                    autoComplete="new-password"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
-                                >
-                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
-                            </div>
-                            {errors.password && (
-                                <p className="mt-1 text-xs text-neon-red font-body">{errors.password.message}</p>
-                            )}
-                        </div>
+                <motion.div
+                    {...fadeUp}
+                    transition={{ duration: 0.3, delay: 0.2 }}
+                    className={`space-y-2.5 transition-opacity duration-300 ${
+                        isSubmitting || isSocialLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'
+                    }`}
+                >
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="lg"
+                        fullWidth
+                        isLoading={isSocialLoading}
+                        onClick={() => socialLogin('google')}
+                        leftIcon={<GoogleIcon className="w-[18px] h-[18px]" />}
+                    >
+                        Continue with Google
+                    </Button>
+                </motion.div>
 
-                        {/* Confirm Password */}
-                        <div>
-                            <label className="block text-sm font-ui text-text-secondary mb-2">Confirm Password</label>
-                            <div className="relative">
-                                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                                <input
-                                    {...register('confirmPassword')}
-                                    type={showPassword ? 'text' : 'password'}
-                                    placeholder="Repeat password"
-                                    className="input-field pl-10"
-                                    autoComplete="new-password"
-                                />
-                            </div>
-                            {errors.confirmPassword && (
-                                <p className="mt-1 text-xs text-neon-red font-body">{errors.confirmPassword.message}</p>
-                            )}
-                        </div>
-
-                        {/* Submit */}
-                        <motion.button
-                            type="submit"
-                            disabled={isRegistering}
-                            className="btn-primary w-full flex items-center justify-center gap-2"
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.99 }}
-                        >
-                            {isRegistering ? (
-                                <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                            ) : (
-                                <>
-                                    Create Account
-                                    <ArrowRight className="w-4 h-4" />
-                                </>
-                            )}
-                        </motion.button>
-                    </form>
-
-                    <div className="mt-6 text-center">
-                        <p className="text-sm text-text-muted font-body">
-                            Already have an account?{' '}
-                            <Link to="/login" className="text-cyan hover:underline font-ui font-medium">
-                                Sign In
-                            </Link>
-                        </p>
-                    </div>
-                </div>
-            </motion.div>
+                <p className="text-center text-[13px] text-text-secondary mt-auto pt-8">
+                    Already have an account?{' '}
+                    <Link
+                        to="/login"
+                        className="font-semibold text-accent hover:text-accent-hover transition-colors"
+                    >
+                        Log in
+                    </Link>
+                </p>
+            </main>
         </div>
     )
 }

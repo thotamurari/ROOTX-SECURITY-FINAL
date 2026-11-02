@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, Link2, MessageSquare, FileUp, ScanLine, Loader2 } from 'lucide-react'
+import { Upload, Link2, ScanLine, FileCheck2, FolderOpen } from 'lucide-react'
+import { Button } from '@/components/shared/Button'
 
 interface Props {
     onScanUrl: (url: string) => void
@@ -11,7 +12,6 @@ interface Props {
 
 export function ScanDropZone({ onScanUrl, onScanFile, onScanMessage, activeTab }: Props) {
     const [urlInput, setUrlInput] = useState('')
-    const [messageInput, setMessageInput] = useState('')
     const [isDragging, setIsDragging] = useState(false)
     const [fileName, setFileName] = useState<string | null>(null)
 
@@ -39,84 +39,158 @@ export function ScanDropZone({ onScanUrl, onScanFile, onScanMessage, activeTab }
         [onScanFile]
     )
 
+    const handleUrlSubmit = () => {
+        if (!urlInput.trim()) return
+        // Auto-prepend https:// if no protocol
+        let url = urlInput.trim()
+        if (!/^https?:\/\//i.test(url)) {
+            url = 'https://' + url
+        }
+        onScanUrl(url)
+    }
+
+    const openFilePicker = () => document.getElementById('file-input')?.click()
+
     return (
-        <div className="glass-card p-6 space-y-4">
+        <div className="space-y-4">
             {/* URL Input */}
             {activeTab === 'url' && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-                    <label className="font-sans text-sm text-[#8888AA] block">
-                        Enter URL to scan
+                <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="space-y-3"
+                >
+                    <label htmlFor="scan-url-input" className="sr-only">
+                        URL to scan
                     </label>
-                    <div className="flex gap-3">
-                        <div className="relative flex-1">
-                            <Link2 className="absolute left-4 top-1/2 -translate-y-1/2 text-[#44445A]" size={16} />
-                            <input
-                                type="url"
-                                value={urlInput}
-                                onChange={(e) => setUrlInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && urlInput && onScanUrl(urlInput)}
-                                placeholder="https://example.com/suspicious-link"
-                                className="w-full h-12 pl-10 pr-4 bg-[#0D0D14] border border-[#2A2A40] rounded-xl text-[#F0F0FF] font-mono text-sm placeholder-[#44445A] focus:outline-none focus:border-[#00F5FF] focus:ring-1 focus:ring-[rgba(0,245,255,0.2)] transition-all duration-200"
-                            />
-                        </div>
-                        <button
-                            onClick={() => urlInput && onScanUrl(urlInput)}
-                            disabled={!urlInput.trim()}
-                            className="px-6 h-12 rounded-xl font-sans font-semibold text-sm bg-[#00F5FF] text-[#060608] hover:bg-[#00D4E0] hover:shadow-[0_0_20px_rgba(0,245,255,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 whitespace-nowrap"
-                        >
-                            <ScanLine size={16} />
-                            Scan URL
-                        </button>
+                    <div className="relative">
+                        <Link2
+                            aria-hidden="true"
+                            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary pointer-events-none"
+                        />
+                        <input
+                            id="scan-url-input"
+                            type="url"
+                            inputMode="url"
+                            autoComplete="url"
+                            value={urlInput}
+                            onChange={(e) => setUrlInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleUrlSubmit()}
+                            placeholder="https://example.com/suspicious-link"
+                            className="input-field h-12 pl-10"
+                        />
+                    </div>
+                    <Button
+                        size="lg"
+                        fullWidth
+                        onClick={handleUrlSubmit}
+                        disabled={!urlInput.trim()}
+                        leftIcon={<ScanLine className="w-4 h-4" />}
+                    >
+                        Scan URL with 4 Tools
+                    </Button>
+
+                    <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+                        {[
+                            { name: 'VirusTotal (70+ Engines)', color: 'text-text-secondary bg-surface-2 border-border' },
+                            { name: 'urlscan.io', color: 'text-text-secondary bg-surface-2 border-border' },
+                            { name: 'Google Safe Browsing', color: 'text-text-secondary bg-surface-2 border-border' },
+                            { name: 'Sucuri SiteCheck', color: 'text-text-secondary bg-surface-2 border-border' },
+                        ].map((t) => (
+                            <span
+                                key={t.name}
+                                className={`text-[11px] font-medium px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${t.color}`}
+                            >
+                                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                                {t.name}
+                            </span>
+                        ))}
                     </div>
 
+                    <p className="text-[12px] text-text-tertiary text-center">
+                        Queries all 4 major security intelligence engines simultaneously.
+                    </p>
                 </motion.div>
             )}
 
             {/* File Input */}
             {activeTab === 'file' && (
                 <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className={`border-2 border-dashed rounded-[12px] p-8 text-center transition-all cursor-pointer
-                        ${isDragging
-                            ? 'border-[#00F5FF] bg-[rgba(0,245,255,0.05)] shadow-[inset_0_0_20px_rgba(0,245,255,0.1)]'
-                            : 'border-[#2A2A40] hover:border-[rgba(0,245,255,0.3)]'
-                        }`}
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-                    onDragLeave={() => setIsDragging(false)}
-                    onDrop={handleDrop}
-                    onClick={() => document.getElementById('file-input')?.click()}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="space-y-3"
                 >
-                    <Upload className={`w-12 h-12 mx-auto mb-4 ${isDragging ? 'text-[#00F5FF]' : 'text-[#44445A]'}`} style={isDragging ? { filter: 'drop-shadow(0 0 8px #00F5FF)' } : {}} />
-                    <p className="text-[14px] font-sans text-[#F0F0FF]">
-                        {fileName ? fileName : 'Drop a file here or click to browse'}
-                    </p>
-                    <p className="text-[12px] text-[#8888AA] font-mono mt-1">APK, PDF, EXE — max 50MB</p>
-                    <input id="file-input" type="file" className="hidden" onChange={handleFileSelect} />
-                </motion.div>
-            )}
-
-            {/* Message Input */}
-            {activeTab === 'message' && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-                    <label className="font-sans text-sm text-[#8888AA] block">
-                        Paste suspicious message content
-                    </label>
-                    <textarea
-                        value={messageInput}
-                        onChange={(e) => setMessageInput(e.target.value)}
-                        placeholder="Paste a suspicious message, email, or SMS content here..."
-                        rows={5}
-                        className="w-full bg-[#0D0D14] border border-[#2A2A40] rounded-xl px-4 py-3 text-[#F0F0FF] font-mono text-sm placeholder-[#44445A] focus:outline-none focus:border-[#00F5FF] focus:ring-1 focus:ring-[rgba(0,245,255,0.2)] transition-all duration-200 resize-none"
-                    />
-                    <button
-                        onClick={() => messageInput && onScanMessage?.(messageInput)}
-                        disabled={!messageInput.trim()}
-                        className="w-full px-6 h-12 rounded-xl font-sans font-semibold text-sm bg-[#00F5FF] text-[#060608] hover:bg-[#00D4E0] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2"
+                    <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Upload a file to scan. Drop a file here, or activate to browse your device."
+                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={handleDrop}
+                        onClick={openFilePicker}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                openFilePicker()
+                            }
+                        }}
+                        className={`border-2 border-dashed rounded-2xl px-5 py-10 sm:py-12 text-center transition-colors duration-200 cursor-pointer outline-none ${
+                            isDragging
+                                ? 'border-accent bg-accent-soft'
+                                : 'border-border-strong bg-surface-2/50 hover:border-accent hover:bg-accent-soft'
+                        }`}
                     >
-                        <MessageSquare size={16} />
-                        Analyze Message
-                    </button>
+                        <motion.span
+                            animate={isDragging ? { scale: 1.06 } : { scale: 1 }}
+                            transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+                            className={`mx-auto mb-4 flex w-14 h-14 items-center justify-center rounded-2xl ${
+                                fileName && !isDragging
+                                    ? 'bg-success-soft text-success'
+                                    : 'bg-accent-soft text-accent'
+                            }`}
+                        >
+                            {fileName && !isDragging ? (
+                                <FileCheck2 className="w-6 h-6" aria-hidden="true" />
+                            ) : (
+                                <Upload className="w-6 h-6" aria-hidden="true" />
+                            )}
+                        </motion.span>
+
+                        <p className="text-[14.5px] font-semibold text-text-primary break-all px-2">
+                            {fileName ? fileName : isDragging ? 'Release to scan' : 'Drop a file to scan'}
+                        </p>
+                        <p className="text-[12.5px] text-text-secondary mt-1">
+                            or use the button below to browse your device
+                        </p>
+                        <p className="text-[11.5px] text-text-tertiary mt-3">
+                            APK, PDF or EXE &middot; up to 50 MB
+                        </p>
+
+                        <label htmlFor="file-input" className="sr-only">
+                            Choose a file to scan
+                        </label>
+                        <input
+                            id="file-input"
+                            type="file"
+                            className="sr-only"
+                            onChange={handleFileSelect}
+                        />
+                    </div>
+
+                    <Button
+                        size="lg"
+                        fullWidth
+                        variant="secondary"
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            openFilePicker()
+                        }}
+                        leftIcon={<FolderOpen className="w-4 h-4" />}
+                    >
+                        Browse files
+                    </Button>
                 </motion.div>
             )}
         </div>

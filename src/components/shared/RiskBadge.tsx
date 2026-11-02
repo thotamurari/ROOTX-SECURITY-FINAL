@@ -6,37 +6,42 @@ interface RiskBadgeProps {
 
 interface RiskConfig {
     label: string
-    bg: string
-    color: string
-    border: string
-    animation?: string
+    bgVar: string
+    colorVar: string
 }
 
+// Mapped onto the shared design-system tokens (--success/--info/--warning/--danger)
+// so risk colors stay consistent with the rest of the app and automatically
+// adapt between light and dark themes.
 const RISK_CONFIG: Record<string, RiskConfig> = {
-    safe:     { label: 'SAFE',     bg: 'rgba(0,255,136,0.1)',   color: '#00FF88', border: 'rgba(0,255,136,0.3)' },
-    caution:  { label: 'CAUTION',  bg: 'rgba(0,245,255,0.1)',   color: '#00F5FF', border: 'rgba(0,245,255,0.3)' },
-    danger:   { label: 'DANGER',   bg: 'rgba(255,140,0,0.1)',   color: '#FF8C00', border: 'rgba(255,140,0,0.3)' },
-    critical: { label: 'CRITICAL', bg: 'rgba(255,51,102,0.12)', color: '#FF3366', border: 'rgba(255,51,102,0.5)', animation: 'pulse 1.5s infinite' },
+    safe:       { label: 'SAFE',       bgVar: 'var(--success-soft)', colorVar: 'var(--success)' },
+    unverified: { label: 'UNVERIFIED', bgVar: 'var(--warning-soft)', colorVar: 'var(--warning)' },
+    caution:    { label: 'CAUTION',    bgVar: 'var(--info-soft)',    colorVar: 'var(--info)' },
+    danger:     { label: 'DANGER',     bgVar: 'var(--warning-soft)', colorVar: 'var(--warning)' },
+    critical:   { label: 'CRITICAL',   bgVar: 'var(--danger-soft)',  colorVar: 'var(--danger)' },
 }
 
-const DEFAULT_CONFIG: RiskConfig = { label: 'SAFE', bg: 'rgba(0,255,136,0.1)', color: '#00FF88', border: 'rgba(0,255,136,0.3)' }
+const DEFAULT_CONFIG: RiskConfig = RISK_CONFIG.safe!
 
 export function RiskBadge({ level, score, size = 'md' }: RiskBadgeProps) {
     const config = RISK_CONFIG[level] || DEFAULT_CONFIG
+    const isCritical = level === 'critical'
 
     return (
         <span
+            className={isCritical ? 'animate-pulse' : undefined}
             style={{
-                background: config.bg,
-                color: config.color,
-                border: `1px solid ${config.border}`,
-                animation: config.animation,
+                background: config.bgVar,
+                color: config.colorVar,
+                border: `1px solid ${config.colorVar}`,
+                borderColor: config.colorVar,
+                opacity: 1,
                 padding: size === 'sm' ? '2px 8px' : '4px 12px',
                 borderRadius: '6px',
                 fontSize: size === 'sm' ? '10px' : '11px',
                 fontFamily: "'IBM Plex Mono', monospace",
                 fontWeight: 600,
-                letterSpacing: '0.1em',
+                letterSpacing: '0.08em',
                 whiteSpace: 'nowrap' as const,
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -52,10 +57,10 @@ export function RiskBadge({ level, score, size = 'md' }: RiskBadgeProps) {
 }
 
 export function getRiskColor(score: number): string {
-    if (score >= 80) return '#FF3366'
-    if (score >= 55) return '#FF8C00'
-    if (score >= 25) return '#00F5FF'
-    return '#00FF88'
+    if (score >= 80) return 'var(--danger)'
+    if (score >= 55) return 'var(--warning)'
+    if (score >= 25) return 'var(--info)'
+    return 'var(--success)'
 }
 
 export function getRiskLevel(score: number): string {

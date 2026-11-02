@@ -76,7 +76,7 @@ router.post('/report', async (req: AuthRequest, res: Response) => {
 
         // Emit to all connected clients
         const io = getIO()
-        io.emit('community:new_threat', report)
+        io?.emit('community:new_threat', report)
 
         logger.info('Community report submitted', { userId: req.userId, threatType: parsed.data.threatType })
         res.status(201).json(report)

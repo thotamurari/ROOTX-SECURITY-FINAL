@@ -7,8 +7,10 @@ import {
     Tooltip,
     ResponsiveContainer,
 } from 'recharts'
+import { motion } from 'framer-motion'
 import type { BehaviorAnomaly } from '@/types/api'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/shared/Card'
 import { Activity } from 'lucide-react'
 
 interface Props {
@@ -26,46 +28,77 @@ export function AnomalyTimeline({ anomalies }: Props) {
         severity: a.severity,
     }))
 
+    const peak = data.reduce((max, d) => (d.score > max.score ? d : max), data[0]!)
+
     return (
-        <div className="glass-card p-4">
-            <h3 className="text-sm font-ui font-semibold text-text-secondary mb-4">Anomaly Timeline</h3>
-            <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={data}>
-                    <defs>
-                        <linearGradient id="anomalyGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#FF8C00" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#FF8C00" stopOpacity={0} />
-                        </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1E1E30" />
-                    <XAxis
-                        dataKey="time"
-                        stroke="#44445A"
-                        tick={{ fill: '#8888AA', fontSize: 10, fontFamily: 'IBM Plex Mono' }}
-                    />
-                    <YAxis
-                        stroke="#44445A"
-                        tick={{ fill: '#8888AA', fontSize: 10, fontFamily: 'IBM Plex Mono' }}
-                    />
-                    <Tooltip
-                        contentStyle={{
-                            backgroundColor: '#13131F',
-                            border: '1px solid #2A2A40',
-                            borderRadius: '12px',
-                            fontFamily: 'IBM Plex Mono',
-                            fontSize: '12px',
-                            color: '#F0F0FF',
-                        }}
-                    />
-                    <Area
-                        type="monotone"
-                        dataKey="score"
-                        stroke="#FF8C00"
-                        fill="url(#anomalyGradient)"
-                        strokeWidth={2}
-                    />
-                </AreaChart>
-            </ResponsiveContainer>
-        </div>
+        <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+        >
+            <Card padding="sm" className="w-full">
+                <CardHeader className="mb-3">
+                    <div className="min-w-0">
+                        <CardTitle>Anomaly Timeline</CardTitle>
+                        <CardDescription>
+                            {data.length} {data.length === 1 ? 'anomaly' : 'anomalies'} recorded
+                        </CardDescription>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 shrink-0 rounded-md bg-warning-soft px-2 py-1 text-[11px] font-semibold text-warning">
+                        <Activity className="w-3.5 h-3.5" aria-hidden="true" />
+                        Peak {peak.score}
+                    </span>
+                </CardHeader>
+
+                {/* Chart colors are driven by the design-system CSS variables so the
+                    graph re-themes automatically in light/dark mode. Recharts passes
+                    these straight through as SVG presentation attributes. */}
+                <div className="w-full" role="img" aria-label={`Anomaly score over time. ${data.length} data points, peaking at ${peak.score} out of 100 at ${peak.time}.`}>
+                    <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
+                            <defs>
+                                <linearGradient id="anomalyGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="var(--warning)" stopOpacity={0.28} />
+                                    <stop offset="95%" stopColor="var(--warning)" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                            <XAxis
+                                dataKey="time"
+                                stroke="var(--border-default)"
+                                tickLine={false}
+                                tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }}
+                            />
+                            <YAxis
+                                stroke="var(--border-default)"
+                                tickLine={false}
+                                axisLine={false}
+                                tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }}
+                            />
+                            <Tooltip
+                                cursor={{ stroke: 'var(--border-strong)', strokeWidth: 1 }}
+                                contentStyle={{
+                                    backgroundColor: 'var(--bg-surface-2)',
+                                    border: '1px solid var(--border-default)',
+                                    borderRadius: '12px',
+                                    boxShadow: 'var(--shadow-md)',
+                                    fontSize: '12px',
+                                    color: 'var(--text-primary)',
+                                }}
+                                labelStyle={{ color: 'var(--text-secondary)', fontSize: '11px' }}
+                                itemStyle={{ color: 'var(--text-primary)' }}
+                            />
+                            <Area
+                                type="monotone"
+                                dataKey="score"
+                                stroke="var(--warning)"
+                                fill="url(#anomalyGradient)"
+                                strokeWidth={2}
+                            />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+            </Card>
+        </motion.div>
     )
 }

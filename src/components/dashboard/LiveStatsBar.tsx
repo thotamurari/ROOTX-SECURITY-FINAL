@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Scan, ShieldX, ShieldCheck, Activity } from 'lucide-react'
+import { Card } from '@/components/shared/Card'
 
 interface StatItem {
     label: string
     value: number
     icon: typeof Scan
-    color: string
-    glowBg: string
+    /** Tailwind classes derived from the semantic token set */
+    iconClass: string
+    valueClass: string
 }
 
 interface Props {
@@ -17,7 +19,7 @@ interface Props {
     activeMonitors: number
 }
 
-function AnimatedCounter({ value, color }: { value: number; color: string }) {
+function AnimatedCounter({ value, className = '' }: { value: number; className?: string }) {
     const [display, setDisplay] = useState(0)
 
     useEffect(() => {
@@ -34,10 +36,7 @@ function AnimatedCounter({ value, color }: { value: number; color: string }) {
     }, [value])
 
     return (
-        <span
-            className="text-[28px] lg:text-[32px] font-orbitron font-black leading-none"
-            style={{ color, textShadow: `0 0 20px ${color}88` }}
-        >
+        <span className={`text-[26px] lg:text-[30px] font-bold leading-none tracking-tight tabular-nums ${className}`}>
             {display}
         </span>
     )
@@ -45,59 +44,55 @@ function AnimatedCounter({ value, color }: { value: number; color: string }) {
 
 export function LiveStatsBar({ scansToday, threatsBlocked, safeOpens, activeMonitors }: Props) {
     const stats: StatItem[] = [
-        { label: 'Scans Today', value: scansToday, icon: Scan, color: '#00F5FF', glowBg: 'rgba(0,245,255,0.08)' },
-        { label: 'Threats Blocked', value: threatsBlocked, icon: ShieldX, color: '#FF3366', glowBg: 'rgba(255,51,102,0.08)' },
-        { label: 'Safe Opens', value: safeOpens, icon: ShieldCheck, color: '#00FF88', glowBg: 'rgba(0,255,136,0.08)' },
-        { label: 'Active Monitors', value: activeMonitors, icon: Activity, color: '#FF8C00', glowBg: 'rgba(255,140,0,0.08)' },
+        { label: 'Scans Today', value: scansToday, icon: Scan, iconClass: 'bg-accent-soft text-accent', valueClass: 'text-text-primary' },
+        { label: 'Threats Blocked', value: threatsBlocked, icon: ShieldX, iconClass: 'bg-danger-soft text-danger', valueClass: 'text-danger' },
+        { label: 'Safe Opens', value: safeOpens, icon: ShieldCheck, iconClass: 'bg-success-soft text-success', valueClass: 'text-text-primary' },
+        { label: 'Active Monitors', value: activeMonitors, icon: Activity, iconClass: 'bg-warning-soft text-warning', valueClass: 'text-text-primary' },
     ]
 
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             {stats.map((stat, i) => (
                 <motion.div
                     key={stat.label}
-                    className="glass-card p-4 sm:p-5"
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.08, duration: 0.4 }}
+                    transition={{ delay: i * 0.06, duration: 0.25, ease: 'easeOut' }}
                 >
-                    <div className="flex items-center gap-3">
-                        <div
-                            className="w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0"
-                            style={{ background: stat.glowBg }}
-                        >
-                            <stat.icon
-                                className="w-5 h-5"
-                                style={{ color: stat.color, filter: `drop-shadow(0 0 6px ${stat.color})` }}
-                            />
-                        </div>
-                        <div>
-                            <AnimatedCounter value={stat.value} color={stat.color} />
-                            <p className="text-[11px] text-[#8888AA] font-sans mt-0.5">{stat.label}</p>
-                        </div>
-                    </div>
-
-                    {/* LIVE pulse for Active Monitors */}
-                    {stat.label === 'Active Monitors' && (
-                        <div className="flex items-center gap-1.5 mt-2">
-                            <div className="w-2 h-2 rounded-full bg-[#00FF88] animate-[live-pulse_1.5s_ease-in-out_infinite]" />
-                            <span className="text-[10px] font-mono font-semibold text-[#00FF88] uppercase tracking-wider">LIVE</span>
-                        </div>
-                    )}
-
-                    {/* Subtle red glow if threats > 0 */}
-                    {stat.label === 'Threats Blocked' && stat.value > 0 && (
-                        <div className="mt-2">
-                            <div className="h-1 rounded-full bg-[rgba(255,51,102,0.3)] overflow-hidden">
-                                <motion.div
-                                    className="h-full bg-[#FF3366] rounded-full"
-                                    initial={{ width: 0 }}
-                                    animate={{ width: '60%' }}
-                                    transition={{ delay: 1, duration: 0.8 }}
-                                />
+                    <Card padding="sm" className="h-full">
+                        <div className="flex items-center gap-3">
+                            <span
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${stat.iconClass}`}
+                                aria-hidden="true"
+                            >
+                                <stat.icon className="w-5 h-5" />
+                            </span>
+                            <div className="min-w-0">
+                                <AnimatedCounter value={stat.value} className={stat.valueClass} />
+                                <p className="text-[11.5px] text-text-secondary mt-1 truncate">{stat.label}</p>
                             </div>
                         </div>
-                    )}
+
+                        {/* LIVE pulse for Active Monitors */}
+                        {stat.label === 'Active Monitors' && (
+                            <div className="flex items-center gap-1.5 mt-3">
+                                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" aria-hidden="true" />
+                                <span className="text-[10px] font-semibold text-success uppercase tracking-[0.14em]">Live</span>
+                            </div>
+                        )}
+
+                        {/* Threat pressure indicator */}
+                        {stat.label === 'Threats Blocked' && stat.value > 0 && (
+                            <div className="mt-3 h-1 rounded-full bg-danger-soft overflow-hidden" aria-hidden="true">
+                                <motion.div
+                                    className="h-full bg-danger rounded-full"
+                                    initial={{ width: 0 }}
+                                    animate={{ width: '60%' }}
+                                    transition={{ delay: 0.8, duration: 0.8 }}
+                                />
+                            </div>
+                        )}
+                    </Card>
                 </motion.div>
             ))}
         </div>

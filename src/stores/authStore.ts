@@ -1,47 +1,92 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import type { User as FirebaseUser } from 'firebase/auth'
 import type { UserProfile } from '@/types/api'
 
 interface AuthState {
     user: UserProfile | null
-    accessToken: string | null
+    firebaseUser: FirebaseUser | null
     isAuthenticated: boolean
     isLoading: boolean
-    login: (user: UserProfile, token: string) => void
-    logout: () => void
-    setLoading: (loading: boolean) => void
+    setFirebaseUser: (firebaseUser: FirebaseUser | null) => void
     setUser: (user: UserProfile | null) => void
-    setAccessToken: (token: string | null) => void
+    setLoading: (loading: boolean) => void
+    login: (user: UserProfile, firebaseUser: FirebaseUser) => void
+    logout: () => void
 }
 
-export const useAuthStore = create<AuthState>()(
-    persist(
-        (set) => ({
-            user: null,
-            accessToken: null,
-            isAuthenticated: false,
-            isLoading: true, // initial state is loading while we check localstorage/tokens
-            login: (user, token) => {
-                localStorage.setItem('safeopen_user', JSON.stringify(user))
-                localStorage.setItem('safeopen_token', token)
-                set({ user, accessToken: token, isAuthenticated: true, isLoading: false })
-            },
-            logout: () => {
-                localStorage.removeItem('safeopen_token')
-                localStorage.removeItem('safeopen_user')
-                set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false })
-            },
-            setLoading: (loading) => set({ isLoading: loading }),
-            setUser: (user) => set({ user }),
-            setAccessToken: (token) => set({ accessToken: token })
-        }),
-        {
-            name: 'safeopen-auth',
-            partialize: (state) => ({ 
-                user: state.user, 
-                accessToken: state.accessToken,
-                isAuthenticated: state.isAuthenticated 
+const getCachedUser = (): UserProfile | null => {
+    try {
+        const stored = localStorage.getItem('rootx_cached_user')
+        return stored ? JSON.parse(stored) : null
+    } catch {
+        return null
+    }
+}
+
+export const useAuthStore = create<AuthState>()((set) => ({
+    user: null,
+    firebaseUser: null,
+    isAuthenticated: false,
+    isLoading: true, // Wait for Firebase onAuthStateChanged to resolve
+
+    setFirebaseUser: (firebaseUser) => {
+        if (firebaseUser) {
+            const profile: UserProfile = {
+                id: firebaseUser.uid,
+                email: firebaseUser.email ?? '',
+                plan: 'free',
+                createdAt: firebaseUser.metadata.creationTime ?? new Date().toISOString(),
+            }
+            try {
+                localStorage.setItem('rootx_cached_user', JSON.stringify(profile))
+            } catch { /* ignore */ }
+            set({
+                firebaseUser,
+                user: profile,
+                isAuthenticated: true,
+                isLoading: false,
+            })
+        } else {
+            try {
+                localStorage.removeItem('rootx_cached_user')
+            } catch { /* ignore */ }
+            set({
+                firebaseUser: null,
+                user: null,
+                isAuthenticated: false,
+                isLoading: false,
             })
         }
-    )
-)
+    },
+
+    setUser: (user) => {
+        if (user) {
+            try { localStorage.setItem('rootx_cached_user', JSON.stringify(user)) } catch { /* ignore */ }
+        } else {
+            try { localStorage.removeItem('rootx_cached_user') } catch { /* ignore */ }
+        }
+        set({ user })
+    },
+
+    setLoading: (loading) => set({ isLoading: loading }),
+
+    login: (user, firebaseUser) => {
+        try { localStorage.setItem('rootx_cached_user', JSON.stringify(user)) } catch { /* ignore */ }
+        set({
+            user,
+            firebaseUser,
+            isAuthenticated: true,
+            isLoading: false,
+        })
+    },
+
+    logout: () => {
+        try { localStorage.removeItem('rootx_cached_user') } catch { /* ignore */ }
+        set({
+            user: null,
+            firebaseUser: null,
+            isAuthenticated: false,
+            isLoading: false,
+        })
+    },
+}))

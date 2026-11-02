@@ -1,6 +1,7 @@
 import { Server, type Socket } from 'socket.io'
 import type { Server as HTTPServer } from 'http'
 import { verifyToken } from '../utils/jwt.js'
+import { verifyFirebaseToken, isFirebaseAdminConfigured } from '../utils/firebaseAdmin.js'
 import { config } from '../config/index.js'
 import logger from '../utils/logger.js'
 
@@ -17,58 +18,69 @@ export function initSocket(httpServer: HTTPServer): Server {
         pingInterval: 25000,
     })
 
-    // Auth middleware for Socket.io
-    io.use((socket, next) => {
+    // Auth middleware for Socket.io (Supports Firebase token, local token, and explicit userId)
+    io.use(async (socket, next) => {
         const token = socket.handshake.auth?.token
-        if (!token) {
-            return next(new Error('Authentication error'))
+        const explicitUserId = socket.handshake.auth?.userId
+
+        if (token) {
+            try {
+                if (isFirebaseAdminConfigured) {
+                    const fbUser = await verifyFirebaseToken(token)
+                    ;(socket as Socket & { userId?: string }).userId = fbUser.uid
+                }
+            } catch {
+                try {
+                    const payload = verifyToken(token)
+                    ;(socket as Socket & { userId?: string }).userId = payload.userId
+                } catch {
+                    // Fall back to explicit userId if provided
+                }
+            }
         }
 
-        try {
-            const payload = verifyToken(token)
-                ; (socket as Socket & { userId?: string }).userId = payload.userId
-            next()
-        } catch {
-            next(new Error('Invalid token'))
+        if (!(socket as any).userId && explicitUserId) {
+            ;(socket as Socket & { userId?: string }).userId = String(explicitUserId)
         }
+
+        next()
     })
 
     io.on('connection', (socket) => {
         const userId = (socket as Socket & { userId?: string }).userId
-        if (!userId) return
+        if (userId) {
+            socket.join(`user:${userId}`)
+            socket.join(`tracker:${userId}`)
+        }
 
-        // Join user's private room
-        socket.join(`user:${userId}`)
-        logger.info('Socket connected', { userId, socketId: socket.id })
-
-        // Join global room for community alerts
+        // Join global room for real-time cross-device scan sync
         socket.join('global')
+        logger.info('Socket connected', { userId: userId || 'guest', socketId: socket.id })
 
         // Handle tracker live subscription
         socket.on('tracker:subscribe', () => {
-            socket.join(`tracker:${userId}`)
-            logger.debug('Tracker subscribed', { userId })
+            if (userId) socket.join(`tracker:${userId}`)
         })
 
         // Handle scan room join
         socket.on('scan:subscribe', (data: { scanId: string }) => {
-            socket.join(`scan:${data.scanId}`)
+            if (data?.scanId) socket.join(`scan:${data.scanId}`)
         })
 
         socket.on('disconnect', (reason) => {
-            logger.info('Socket disconnected', { userId, reason })
+            logger.info('Socket disconnected', { userId: userId || 'guest', reason })
         })
 
         // APK scan cancellation via WebSocket
         socket.on('apk:stop:scan' as any, (data: { jobId: string }) => {
             if (data?.jobId) {
                 import('../services/scan/queues/apkScan.queue.js').then(m => m.cancelApkScanJob(data.jobId))
-                logger.info('APK scan cancel requested via socket', { userId, jobId: data.jobId })
+                logger.info('APK scan cancel requested via socket', { userId: userId || 'guest', jobId: data.jobId })
             }
         })
 
         socket.on('error', (error) => {
-            logger.error('Socket error', { userId, error })
+            logger.error('Socket error', { userId: userId || 'guest', error })
         })
     })
 
@@ -76,7 +88,6 @@ export function initSocket(httpServer: HTTPServer): Server {
     return io
 }
 
-export function getIO(): Server {
-    if (!io) throw new Error('Socket.io not initialized')
-    return io
+export function getIO(): Server | null {
+    return io || null
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRiskScore } from '@/hooks/useRiskScore'
 
@@ -7,15 +7,34 @@ interface Props {
     size?: number
 }
 
+/** Reads a CSS custom property off <html> so the canvas matches the active theme. */
+function cssVar(name: string, fallback: string): string {
+    if (typeof window === 'undefined') return fallback
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    return value || fallback
+}
+
 export function RiskScoreMeter({ score, size = 240 }: Props) {
     const risk = useRiskScore(score)
     const canvasRef = useRef<HTMLCanvasElement>(null)
+    // Bumped whenever the theme class on <html> changes so the canvas repaints
+    // with the light/dark token values instead of stale colors.
+    const [themeVersion, setThemeVersion] = useState(0)
+
+    useEffect(() => {
+        const observer = new MutationObserver(() => setThemeVersion((v) => v + 1))
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+        return () => observer.disconnect()
+    }, [])
 
     useEffect(() => {
         const canvas = canvasRef.current
         if (!canvas) return
         const ctx = canvas.getContext('2d')
         if (!ctx) return
+
+        const trackColor = cssVar('--bg-surface-3', '#22252b')
+        const tickIdleColor = cssVar('--border-strong', 'rgba(255,255,255,0.16)')
 
         const dpr = window.devicePixelRatio || 1
         canvas.width = size * dpr
@@ -31,7 +50,7 @@ export function RiskScoreMeter({ score, size = 240 }: Props) {
         // Background arc
         ctx.beginPath()
         ctx.arc(cx, cy, radius, startAngle, endAngle)
-        ctx.strokeStyle = '#1E1E30'
+        ctx.strokeStyle = trackColor
         ctx.lineWidth = 12
         ctx.lineCap = 'round'
         ctx.stroke()
@@ -44,7 +63,7 @@ export function RiskScoreMeter({ score, size = 240 }: Props) {
         ctx.lineWidth = 12
         ctx.lineCap = 'round'
         ctx.shadowColor = risk.color
-        ctx.shadowBlur = 15
+        ctx.shadowBlur = 8
         ctx.stroke()
         ctx.shadowBlur = 0
 
@@ -58,7 +77,7 @@ export function RiskScoreMeter({ score, size = 240 }: Props) {
             ctx.beginPath()
             ctx.moveTo(x1, y1)
             ctx.lineTo(x2, y2)
-            ctx.strokeStyle = i * 10 <= score ? risk.color + '80' : '#2A2A40'
+            ctx.strokeStyle = i * 10 <= score ? risk.color + '80' : tickIdleColor
             ctx.lineWidth = 1.5
             ctx.stroke()
         }
@@ -81,24 +100,29 @@ export function RiskScoreMeter({ score, size = 240 }: Props) {
         ctx.arc(cx, cy, 4, 0, Math.PI * 2)
         ctx.fillStyle = risk.color
         ctx.fill()
-    }, [score, size, risk.color])
+    }, [score, size, risk.color, themeVersion])
 
     return (
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center max-w-full">
             <canvas
                 ref={canvasRef}
+                role="img"
+                aria-label={`Risk score ${score} out of 100 — ${risk.label}`}
+                className="max-w-full"
                 style={{ width: size, height: size * 0.65 }}
             />
             <motion.div
                 className="text-center -mt-2"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25, duration: 0.3 }}
             >
-                <p className="text-4xl font-display font-bold" style={{ color: risk.color }}>
+                <p className="text-[34px] leading-none font-bold tabular-nums" style={{ color: risk.color }}>
                     {score}
                 </p>
-                <p className="text-sm font-body text-text-muted">{risk.label}</p>
+                <p className="text-[12px] font-semibold text-text-tertiary uppercase tracking-wider mt-1.5">
+                    {risk.label}
+                </p>
             </motion.div>
         </div>
     )

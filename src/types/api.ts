@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-// SafeOpen API Response Types
+// RootX-Security API Response Types
 // ═══════════════════════════════════════════════
 
 // Auth
@@ -17,7 +17,8 @@ export interface UserProfile {
 
 // Scan
 export type ScanType = 'url' | 'file' | 'message' | 'apk'
-export type ThreatLevel = 'safe' | 'caution' | 'danger' | 'critical'
+export type ThreatLevel = 'safe' | 'unverified' | 'caution' | 'danger' | 'critical'
+export type VerificationTier = 'verified_safe' | 'unverified' | 'high_risk'
 export type Severity = 'low' | 'medium' | 'high' | 'critical'
 
 export interface ScanResult {
@@ -33,13 +34,85 @@ export interface ScanResult {
     scannedAt: string
     scanDuration: number
     aiAnalysis: AIAnalysis | null
-    communityMatches: number
+    communityMatches?: number
+    userId?: string
+    verificationTier?: VerificationTier
+    analysisMethod?: 'local_heuristic' | 'backend_multi_engine'
 }
 
 export interface Indicator {
     name: string
     severity: Severity
     description: string
+    type?: string
+}
+
+export type ThreatIndicator = Indicator
+
+export type VendorCategory = 'malicious' | 'suspicious' | 'clean' | 'undetected'
+
+export interface VendorResult {
+    engine: string
+    category: VendorCategory
+    result: string
+}
+
+export interface DetectionStats {
+    malicious: number
+    suspicious: number
+    clean: number
+    undetected: number
+    total: number
+}
+
+export interface ToolsBreakdown {
+    virusTotal: {
+        name: string
+        status: 'safe' | 'suspicious' | 'malicious' | 'unknown'
+        maliciousCount: number
+        suspiciousCount: number
+        cleanCount: number
+        totalVendors: number
+        verdict: string
+    }
+    urlScan: {
+        name: string
+        status: 'safe' | 'suspicious' | 'malicious'
+        score: number
+        domain: string
+        ip: string | null
+        country: string | null
+        server: string | null
+        pageTitle: string | null
+        asn: string | null
+        screenshot: string | null
+        url: string
+        verdict: string
+    }
+    googleSafeBrowsing: {
+        name?: string
+        status: 'safe' | 'malicious'
+        isSafe: boolean
+        threatType: string | null
+        verdict: string
+    }
+    sucuri: {
+        status: 'safe' | 'warning' | 'malicious'
+        isSafe: boolean
+        blacklisted: boolean
+        malwareFound: boolean
+        webServer: string | null
+        cdn: string | null
+        certIssuer: string | null
+        securityRecommendations: string[]
+        verdict: string
+    }
+}
+
+export interface SourceConsulted {
+    name: string
+    status: 'clean' | 'flagged' | 'unavailable' | 'unknown'
+    detail: string
 }
 
 export interface AIAnalysis {
@@ -47,6 +120,13 @@ export interface AIAnalysis {
     confidence: number
     details?: string[]
     recommendation?: string
+    detectionStats?: DetectionStats | null
+    vendors?: VendorResult[]
+    toolsBreakdown?: ToolsBreakdown
+    resolvedIp?: string | null
+    domain?: string
+    scannedAtUtc?: string
+    sourcesConsulted?: SourceConsulted[]
 }
 
 // Behavioral DNA
@@ -141,6 +221,17 @@ export interface ScanUrlRequest {
     url: string
 }
 
+// Device sessions ("Active Devices")
+export interface DeviceSession {
+    id: string
+    deviceId: string
+    deviceName: string
+    platform: 'web' | 'android' | 'ios'
+    createdAt: string
+    lastSeenAt: string
+    current: boolean
+}
+
 export interface ScanMessageRequest {
     message: string
 }
@@ -214,6 +305,14 @@ export interface InstalledApp {
     version: string
     permissions: number
     dangerousPermissions: number
+    isSystemApp?: boolean
+    // Trust signals driving risk classification (see riskClassification.ts)
+    packageName?: string
+    installSource?: 'play_store' | 'preinstalled' | 'sideloaded' | 'unknown'
+    signatureVerified?: boolean
+    knownThreat?: boolean
+    trustLevel?: 'trusted' | 'untrusted'
+    signals?: string[]
 }
 
 export interface BatteryScenario {
@@ -227,11 +326,22 @@ export interface BatteryScenario {
     status: 'great' | 'good' | 'low' | 'critical'
 }
 
+export type BatteryHealthGrade = 'excellent' | 'good' | 'fair' | 'degraded' | 'poor'
+
 export interface BatteryEstimator {
     currentPercent: number
     capacity: number
     temperature: number
     drainRate: number
+    health?: string
+    voltage?: number
+    isCharging?: boolean
+    plugged?: boolean
+    chargingTime?: number
+    dischargingTime?: number
     scenarios: BatteryScenario[]
     tips: string[]
+    healthGrade?: BatteryHealthGrade
+    healthSummary?: string
+    alerts?: string[]
 }

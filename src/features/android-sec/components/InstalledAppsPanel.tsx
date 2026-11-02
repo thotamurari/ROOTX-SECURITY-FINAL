@@ -1,290 +1,558 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-    Search, Filter, LayoutGrid, List as ListIcon, 
-    ChevronDown, ChevronRight, ShieldCheck, AlertTriangle, 
-    ShieldAlert, Info, Trash2, Shield, Box, Activity, ChevronUp 
+import {
+    Search, ShieldCheck, AlertTriangle,
+    ShieldAlert, Info, Trash2, Activity,
+    ChevronDown, Eye, EyeOff, Smartphone, RefreshCw
 } from 'lucide-react'
 import type { InstalledApp } from '@/types/api'
+import { Card } from '@/components/shared/Card'
+import { Button } from '@/components/shared/Button'
+import { isNativePlatform } from '@/services/nativeDevice'
+import { analyzeAllApps, type FakeAppResult } from '../utils/fakeAppDetector'
+import type { NativeInstalledApp } from '@/services/nativeDevice'
 
 interface Props {
     apps: InstalledApp[]
+    onRefresh?: () => void
+    isRefreshing?: boolean
 }
 
 const getBadgeColor = (status: string) => {
-    switch(status) {
-        case 'safe': return 'bg-[rgba(0,255,127,0.1)] text-[#00FF7F] border-[rgba(0,255,127,0.2)]'
-        case 'caution': return 'bg-[rgba(255,224,0,0.1)] text-[#FFE000] border-[rgba(255,224,0,0.2)]'
-        case 'risky': return 'bg-[rgba(255,23,68,0.1)] text-[#FF1744] border-[rgba(255,23,68,0.2)]'
-        default: return 'bg-[rgba(0,255,255,0.05)] text-[#B0BEC5] border-[rgba(0,255,255,0.1)]'
+    switch (status) {
+        case 'safe': return 'bg-success-soft text-success border-success/20'
+        case 'caution': return 'bg-warning-soft text-warning border-warning/20'
+        case 'risky': return 'bg-danger-soft text-danger border-danger/20'
+        default: return 'bg-surface-2 text-text-tertiary border-border'
     }
 }
 
 const getIcon = (status: string) => {
-    switch(status) {
-        case 'safe': return <ShieldCheck className="w-4 h-4 text-[#00FF7F]" />
-        case 'caution': return <AlertTriangle className="w-4 h-4 text-[#FFE000]" />
-        case 'risky': return <ShieldAlert className="w-4 h-4 text-[#FF1744]" />
-        default: return <Info className="w-4 h-4 text-[#B0BEC5]" />
+    switch (status) {
+        case 'safe': return <ShieldCheck className="w-4 h-4 text-success" />
+        case 'caution': return <AlertTriangle className="w-4 h-4 text-warning" />
+        case 'risky': return <ShieldAlert className="w-4 h-4 text-danger" />
+        default: return <Info className="w-4 h-4 text-text-tertiary" />
     }
 }
 
-// Format MB to GB if needed
 const formatSize = (mb: number) => {
-    if (mb >= 1000) return `${(mb / 1000).toFixed(2)} GB`
+    if (mb >= 1000) return `${(mb / 1000).toFixed(1)} GB`
     return `${mb} MB`
 }
 
-export function InstalledAppsPanel({ apps }: Props) {
-    const [view, setView] = useState<'list' | 'grid'>('list')
+const getThreatType = (app: InstalledApp): string => {
+    // Use the first signal as the primary threat type when available
+    if (app.signals && app.signals.length > 0) {
+        return app.signals[0]!
+    }
+    return 'Security Concern'
+}
+
+const getRecommendedAction = (app: InstalledApp): { action: string; color: string } => {
+    if (app.safetyStatus === 'risky') {
+        return { action: 'Review permissions & consider removal', color: 'text-danger' }
+    }
+    if (app.safetyStatus === 'caution') {
+        return { action: 'Review and restrict permissions', color: 'text-warning' }
+    }
+    return { action: 'No action required', color: 'text-success' }
+}
+
+export function InstalledAppsPanel({ apps, onRefresh, isRefreshing }: Props) {
     const [search, setSearch] = useState('')
-    const [filter, setFilter] = useState('All')
-    const [sort, setSort] = useState<'storage' | 'lastUsed' | 'risk' | 'name'>('storage')
+    const [activeTab, setActiveTab] = useState<'all' | 'unwanted' | 'safe' | 'system'>('all')
     const [expandedApp, setExpandedApp] = useState<string | null>(null)
+    const isNative = isNativePlatform()
 
-    const filteredApps = useMemo(() => {
-        let result = apps.filter(app => app.name.toLowerCase().includes(search.toLowerCase()))
-        
-        if (filter !== 'All') {
-            result = result.filter(app => 
-                filter === 'Safe' ? app.safetyStatus === 'safe' :
-                filter === 'Caution' ? app.safetyStatus === 'caution' :
-                filter === 'Risky' ? app.safetyStatus === 'risky' :
-                filter === 'Unused' ? app.lastUsed.includes('days') && parseInt(app.lastUsed) > 10 : true
-            )
-        }
+    // Fake / Clone app trust analysis
+    const trustResults = useMemo(() => {
+        // Cast InstalledApp[] → NativeInstalledApp-like objects for the detector
+        const nativeApps = apps.map(app => ({
+            id: app.id,
+            name: app.name,
+            packageName: app.packageName || '',
+            version: app.version || '',
+            versionCode: 0,
+            isSystemApp: app.isSystemApp || false,
+            isDebuggable: false,
+            allowBackup: false,
+            targetSdkVersion: 0,
+            minSdkVersion: 0,
+            firstInstallTime: 0,
+            lastUpdateTime: 0,
+            apkSize: app.apkSize || 0,
+            permissions: [],
+            permissionsCount: app.permissions || 0,
+            dangerousPermissions: [],
+            dangerousPermissionsCount: app.dangerousPermissions || 0,
+            installer: app.installSource || '',
+            isNative: true,
+            installerPackageName: app.installSource === 'play_store' ? 'com.android.vending' : app.installSource === 'preinstalled' ? 'system' : undefined,
+        } as NativeInstalledApp))
+        return analyzeAllApps(nativeApps)
+    }, [apps])
 
-        result.sort((a, b) => {
-            if (sort === 'storage') return b.storageUsed - a.storageUsed
-            if (sort === 'name') return a.name.localeCompare(b.name)
-            if (sort === 'risk') {
-                const map = { risky: 3, caution: 2, safe: 1, unknown: 0 } as any
-                return map[b.safetyStatus] - map[a.safetyStatus]
-            }
-            return 0 // basic sort for 'lastUsed'
-        })
+    // Separate harmful, safe user, and system apps
+    const harmfulApps = useMemo(() => {
+        return apps
+            .filter(app => (app.safetyStatus === 'risky' || app.safetyStatus === 'caution') && !app.isSystemApp)
+            .filter(app => app.name.toLowerCase().includes(search.toLowerCase()) || app.packageName.toLowerCase().includes(search.toLowerCase()))
+            .sort((a, b) => {
+                const map: Record<string, number> = { risky: 3, caution: 2, safe: 1 }
+                const scoreA = map[a.safetyStatus] || 0
+                const scoreB = map[b.safetyStatus] || 0
+                if (scoreB !== scoreA) return scoreB - scoreA
+                return b.dangerousPermissions - a.dangerousPermissions
+            })
+    }, [apps, search])
 
-        return result
-    }, [apps, search, filter, sort])
+    const safeUserApps = useMemo(() => {
+        return apps
+            .filter(app => app.safetyStatus === 'safe' && !app.isSystemApp)
+            .filter(app => app.name.toLowerCase().includes(search.toLowerCase()) || app.packageName.toLowerCase().includes(search.toLowerCase()))
+    }, [apps, search])
 
-    const totalStorage = useMemo(() => apps.reduce((sum, app) => sum + app.storageUsed, 0), [apps])
-    const safeCount = apps.filter(a => a.safetyStatus === 'safe').length
-    const riskyCount = apps.filter(a => a.safetyStatus === 'risky').length
-    
-    const topApps = [...apps].sort((a,b) => b.storageUsed - a.storageUsed).slice(0, 5)
+    const systemApps = useMemo(() => {
+        return apps
+            .filter(app => app.isSystemApp)
+            .filter(app => app.name.toLowerCase().includes(search.toLowerCase()) || app.packageName.toLowerCase().includes(search.toLowerCase()))
+    }, [apps, search])
+
+    const allFilteredApps = useMemo(() => {
+        return apps
+            .filter(app => app.name.toLowerCase().includes(search.toLowerCase()) || app.packageName.toLowerCase().includes(search.toLowerCase()))
+            .sort((a, b) => {
+                const map: Record<string, number> = { risky: 3, caution: 2, safe: 1 }
+                const scoreA = map[a.safetyStatus] || 0
+                const scoreB = map[b.safetyStatus] || 0
+                if (scoreB !== scoreA) return scoreB - scoreA
+                return a.name.localeCompare(b.name)
+            })
+    }, [apps, search])
+
+    const riskyCount = apps.filter(a => a.safetyStatus === 'risky' && !a.isSystemApp).length
+    const cautionCount = apps.filter(a => a.safetyStatus === 'caution' && !a.isSystemApp).length
+    const safeCount = apps.filter(a => a.safetyStatus === 'safe' && !a.isSystemApp).length
+    const systemCount = apps.filter(a => a.isSystemApp).length
+
+    const summary = [
+        { key: 'total', value: apps.length, label: 'All apps', soft: 'bg-accent-soft', text: 'text-accent' },
+        { key: 'risky', value: riskyCount + cautionCount, label: 'Unwanted / Caution', soft: 'bg-warning-soft', text: 'text-warning' },
+        { key: 'safe', value: safeCount, label: 'Verified safe', soft: 'bg-success-soft', text: 'text-success' },
+    ]
 
     return (
-        <div className="rounded-[16px] bg-[linear-gradient(135deg,rgba(8,11,20,0.9)_0%,rgba(13,17,23,0.95)_100%)] border border-[rgba(0,255,255,0.2)] shadow-[0_4px_30px_rgba(0,0,0,0.5)] p-6 flex flex-col w-full overflow-hidden">
+        <Card padding="none" className="overflow-hidden">
             {/* Header */}
-            <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
-                <h2 className="text-[20px] font-orbitron font-bold text-white flex items-center gap-3" style={{ textShadow: '0 0 20px rgba(255,255,255,0.3)' }}>
-                    <Box className="w-6 h-6 text-[#00FFFF]" style={{ filter: 'drop-shadow(0 0 8px #00FFFF)' }} />
-                    Installed Apps ({apps.length})
-                </h2>
-                <div className="flex items-center gap-3 w-full lg:w-auto">
-                    <div className="relative flex-1 lg:w-48">
-                        <Search className="w-4 h-4 text-[#00FFFF] md:ml-3 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input 
-                            type="text" 
-                            placeholder="Search apps..." 
+            <div className="p-5 border-b border-border">
+                <div className="flex items-center justify-between gap-3 mb-4 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-10 h-10 rounded-xl bg-accent-soft flex items-center justify-center shrink-0" aria-hidden="true">
+                            <Smartphone className="w-5 h-5 text-accent" />
+                        </span>
+                        <div className="min-w-0">
+                            <h2 className="text-[15px] font-semibold text-text-primary tracking-tight truncate">
+                                Real Installed Applications
+                            </h2>
+                            <p className="text-[12px] text-text-secondary mt-0.5 truncate">
+                                {isNative ? `Live inspection via Android PackageManager (${apps.length} packages)` : 'Native Android package audit'}
+                            </p>
+                        </div>
+                    </div>
+                    {onRefresh && (
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={onRefresh}
+                            disabled={isRefreshing}
+                            leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
+                        >
+                            Refresh
+                        </Button>
+                    )}
+                </div>
+
+                {/* Alert Summary */}
+                <ul className="grid grid-cols-3 gap-3">
+                    {summary.map(({ key, value, label, soft, text }) => (
+                        <li key={key} className={`${soft} border border-border rounded-xl p-3 text-center`}>
+                            <p className={`text-[20px] font-bold tabular-nums leading-none ${text}`}>{value}</p>
+                            <p className="text-[10px] text-text-tertiary uppercase tracking-wide mt-1.5 leading-tight">
+                                {label}
+                            </p>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            {/* Filter Tabs & Search */}
+            {apps.length > 0 && (
+                <div className="p-4 border-b border-border space-y-3 bg-surface-1/50">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-surface-2 p-1 rounded-xl border border-border">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('all')}
+                            className={`px-3 py-2 rounded-lg text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5 ${activeTab === 'all' ? 'bg-surface-1 text-text-primary shadow-xs border border-border' : 'text-text-secondary hover:text-text-primary'}`}
+                        >
+                            <span>Check All Apps</span>
+                            <span className="text-[10px] bg-surface-3 px-1.5 py-0.2 rounded-full tabular-nums">{apps.length}</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('unwanted')}
+                            className={`px-3 py-2 rounded-lg text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5 ${activeTab === 'unwanted' ? 'bg-warning-soft text-warning border border-warning/30 shadow-xs' : 'text-text-secondary hover:text-text-primary'}`}
+                        >
+                            <span>Unwanted ({riskyCount + cautionCount})</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('safe')}
+                            className={`px-3 py-2 rounded-lg text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5 ${activeTab === 'safe' ? 'bg-success-soft text-success border border-success/30 shadow-xs' : 'text-text-secondary hover:text-text-primary'}`}
+                        >
+                            <span>Verified Safe ({safeCount})</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('system')}
+                            className={`px-3 py-2 rounded-lg text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5 ${activeTab === 'system' ? 'bg-surface-1 text-accent border border-border shadow-xs' : 'text-text-secondary hover:text-text-primary'}`}
+                        >
+                            <span>System ({systemCount})</span>
+                        </button>
+                    </div>
+
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary pointer-events-none" aria-hidden="true" />
+                        <input
+                            type="text"
+                            placeholder="Search installed apps by name or package..."
+                            aria-label="Search installed apps"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="bg-[#080B14] border border-[rgba(0,255,255,0.2)] rounded-[12px] pl-10 pr-4 py-2 text-[13px] font-mono text-white w-full outline-none focus:border-[#00FFFF] focus:shadow-[0_0_15px_rgba(0,255,255,0.2)] placeholder:text-[#607D8B]"
+                            className="input-field pl-10"
                         />
                     </div>
-                    <select 
-                        className="bg-[#0A0F1E] border border-[rgba(0,255,255,0.2)] rounded-[12px] px-3 py-2 text-[13px] font-mono text-[#00FFFF] outline-none"
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value)}
-                    >
-                        {['All', 'Safe', 'Caution', 'Risky', 'Unused'].map(f => (
-                            <option key={f} value={f}>{f}</option>
-                        ))}
-                    </select>
                 </div>
-            </div>
+            )}
 
-            {/* Sort & View toggles */}
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b border-[rgba(0,255,255,0.1)] pb-4 mb-4 gap-4">
-                <div className="flex flex-wrap items-center gap-2">
-                    {['storage', 'lastUsed', 'risk', 'name'].map(s => (
-                        <button 
-                            key={s}
-                            onClick={() => setSort(s as any)}
-                            className={`px-4 py-1.5 rounded-[8px] text-[12px] font-mono font-bold transition-all border ${sort === s ? 'bg-[rgba(0,255,255,0.1)] border-[#00FFFF] text-[#00FFFF]' : 'bg-[rgba(0,0,0,0.2)] border-transparent text-[#607D8B] hover:text-[#B0BEC5]'}`}
+            {/* Empty state / Browser state */}
+            {apps.length === 0 && (
+                <div className="text-center py-12 px-4">
+                    <span className="w-14 h-14 rounded-2xl bg-accent-soft flex items-center justify-center mx-auto mb-4" aria-hidden="true">
+                        <Smartphone className="w-7 h-7 text-accent" />
+                    </span>
+                    <h3 className="text-[15px] font-semibold text-text-primary mb-1">
+                        {isNative ? 'Ready to inspect device' : 'Native Android inspection'}
+                    </h3>
+                    <p className="text-[13px] text-text-secondary max-w-sm mx-auto mb-4 leading-relaxed">
+                        {isNative
+                            ? 'Querying Android PackageManager for installed packages. Tap refresh to reload.'
+                            : 'Reading all installed packages requires running inside the RootX Android APK on your mobile device.'}
+                    </p>
+                    {onRefresh && (
+                        <Button
+                            variant="primary"
+                            size="md"
+                            onClick={onRefresh}
+                            disabled={isRefreshing}
+                            leftIcon={<RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
                         >
-                            {s === 'storage' ? 'Storage ↓' : s === 'lastUsed' ? 'Last Used' : s === 'risk' ? 'Risk Level' : 'Name A-Z'}
-                        </button>
-                    ))}
+                            Scan Installed Apps
+                        </Button>
+                    )}
                 </div>
-                <div className="flex items-center gap-2 p-1 bg-[rgba(0,0,0,0.2)] border border-[rgba(0,255,255,0.1)] rounded-[8px] shrink-0">
-                    <button onClick={() => setView('grid')} className={`p-1.5 rounded-md ${view === 'grid' ? 'bg-[rgba(0,255,255,0.1)] text-[#00FFFF]' : 'text-[#607D8B] hover:text-[#B0BEC5]'}`}><LayoutGrid className="w-4 h-4" /></button>
-                    <button onClick={() => setView('list')} className={`p-1.5 rounded-md ${view === 'list' ? 'bg-[rgba(0,255,255,0.1)] text-[#00FFFF]' : 'text-[#607D8B] hover:text-[#B0BEC5]'}`}><ListIcon className="w-4 h-4" /></button>
-                </div>
-            </div>
+            )}
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-[rgba(0,255,255,0.02)] border border-[rgba(0,255,255,0.1)] rounded-[16px] p-4 flex flex-col justify-center items-center">
-                    <p className="text-[10px] text-[#B0BEC5] uppercase font-bold tracking-[2px] mb-1">Total Apps</p>
-                    <p className="text-[24px] font-orbitron font-bold text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">{apps.length}</p>
-                </div>
-                <div className="bg-[rgba(0,255,127,0.05)] border border-[rgba(0,255,127,0.1)] rounded-[16px] p-4 flex flex-col justify-center items-center">
-                    <p className="text-[10px] text-[#00FF7F] uppercase font-bold tracking-[2px] mb-1">Safe Apps</p>
-                    <p className="text-[24px] font-orbitron font-bold text-[#00FF7F] drop-shadow-[0_0_10px_#00FF7F]">{safeCount}</p>
-                </div>
-                <div className="bg-[rgba(255,23,68,0.05)] border border-[rgba(255,23,68,0.1)] rounded-[16px] p-4 flex flex-col justify-center items-center">
-                    <p className="text-[10px] text-[#FF1744] uppercase font-bold tracking-[2px] mb-1">Risky Apps</p>
-                    <p className="text-[24px] font-orbitron font-bold text-[#FF1744] drop-shadow-[0_0_10px_#FF1744]">{riskyCount}</p>
-                </div>
-                <div className="bg-[rgba(255,224,0,0.05)] border border-[rgba(255,224,0,0.1)] rounded-[16px] p-4 flex flex-col justify-center items-center">
-                    <p className="text-[10px] text-[#FFE000] uppercase font-bold tracking-[2px] mb-1">Storage Used</p>
-                    <p className="text-[20px] font-orbitron font-bold text-[#FFE000] drop-shadow-[0_0_10px_#FFE000]">{formatSize(totalStorage)}</p>
-                </div>
-            </div>
-
-            {/* Main Content View */}
-            <div className="min-h-[400px]">
-                {view === 'grid' ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                        {filteredApps.map(app => (
-                            <div key={app.id} className="bg-surface border border-border rounded-xl p-4 flex flex-col items-center text-center hover:bg-surface-light/30 transition-colors">
-                                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center mb-3">
-                                    <Box className="w-6 h-6 text-indigo-400" />
-                                </div>
-                                <h3 className="text-sm font-medium text-text-primary truncate w-full">{app.name}</h3>
-                                <p className="text-xs text-text-muted mt-1">{formatSize(app.storageUsed)}</p>
-                                <span className={`mt-2 px-2 py-0.5 rounded uppercase text-[10px] border font-bold ${getBadgeColor(app.safetyStatus)}`}>
-                                    {app.safetyStatus}
+            {/* App List by Active Tab */}
+            {apps.length > 0 && (
+                <div className="p-4 space-y-3">
+                    {/* ─── TAB 1: ALL APPS ─── */}
+                    {activeTab === 'all' && (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between px-1 py-1">
+                                <span className="text-[11.5px] font-semibold text-text-tertiary uppercase tracking-wider">
+                                    All Installed Packages ({allFilteredApps.length})
                                 </span>
-                                <p className="text-[10px] text-text-secondary mt-2 truncate w-full">Last: {app.lastUsed}</p>
                             </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        {filteredApps.map(app => {
-                            const isExpanded = expandedApp === app.id
-                            return (
-                                <div key={app.id} className="bg-surface border border-border rounded-xl overflow-hidden transition-colors hover:border-border/80">
-                                    <div 
-                                        onClick={() => setExpandedApp(isExpanded ? null : app.id)}
-                                        className="p-3 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-surface-light/20"
-                                    >
-                                        <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
-                                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
-                                                <Box className="w-5 h-5 text-indigo-400" />
-                                            </div>
-                                            <div className="flex flex-col justify-center min-w-0">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <h3 className="text-sm font-medium text-text-primary truncate">{app.name}</h3>
-                                                    <span className="text-[10px] text-text-muted hidden sm:block border px-1.5 py-0.5 rounded border-border uppercase font-ui">{app.category}</span>
-                                                </div>
-                                                <p className="text-[11px] text-text-secondary truncate mt-0.5">v{app.version} · <span className="text-text-muted">Last used:</span> {app.lastUsed}</p>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-3 sm:gap-6 shrink-0 ml-4">
-                                            <div className="hidden md:flex flex-col text-right">
-                                                <span className="text-xs font-mono text-text-secondary">{formatSize(app.storageUsed)}</span>
-                                                <span className="text-[10px] text-text-muted">Permissions: {app.permissions}</span>
-                                            </div>
-                                            <span className={`hidden sm:inline-flex px-2 py-1 flex items-center gap-1.5 rounded text-[10px] border font-bold uppercase tracking-wider ${getBadgeColor(app.safetyStatus)}`}>
-                                                {getIcon(app.safetyStatus)} {app.safetyStatus}
-                                            </span>
-                                            <div className="p-1 rounded bg-surface-light shrink-0">
-                                                {isExpanded ? <ChevronUp className="w-4 h-4 text-text-secondary" /> : <ChevronDown className="w-4 h-4 text-text-muted" />}
-                                            </div>
-                                        </div>
-                                    </div>
+                            {allFilteredApps.length === 0 ? (
+                                <p className="text-center py-8 text-[13px] text-text-tertiary">No apps match "{search}"</p>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {allFilteredApps.map((app) => {
+                                        const isExpanded = expandedApp === app.id
+                                        const isCritical = app.safetyStatus === 'risky'
+                                        const isCaution = app.safetyStatus === 'caution'
 
-                                    {/* Expaned Row Content */}
-                                    <AnimatePresence>
-                                        {isExpanded && (
-                                            <motion.div 
-                                                initial={{ height: 0, opacity: 0 }}
-                                                animate={{ height: 'auto', opacity: 1 }}
-                                                exit={{ height: 0, opacity: 0 }}
-                                                className="border-t border-border/50 bg-[#060608]/50 overflow-hidden"
+                                        return (
+                                            <li
+                                                key={app.id}
+                                                className={`rounded-2xl border overflow-hidden transition-colors ${
+                                                    isCritical
+                                                        ? 'bg-danger-soft border-danger/20'
+                                                        : isCaution
+                                                        ? 'bg-warning-soft border-warning/20'
+                                                        : 'bg-surface-2 border-border'
+                                                }`}
                                             >
-                                                <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                    
-                                                    {/* Storage Breakdown */}
-                                                    <div className="space-y-3">
-                                                        <h4 className="text-xs font-ui font-semibold text-text-secondary uppercase">Storage Breakdown</h4>
-                                                        <div className="text-xs font-mono text-text-muted flex justify-between">
-                                                            <span>APK: {app.apkSize}MB</span>
-                                                            <span>Data: {app.dataSize}MB</span>
-                                                            <span>Cache: {app.cacheSize}MB</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExpandedApp(isExpanded ? null : app.id)}
+                                                    aria-expanded={isExpanded}
+                                                    className="w-full p-4 flex items-center gap-3 sm:gap-4 text-left cursor-pointer hover:bg-surface-2/60 transition-colors"
+                                                >
+                                                    <span
+                                                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                                                            isCritical
+                                                                ? 'bg-danger-soft border-danger/20 text-danger'
+                                                                : isCaution
+                                                                ? 'bg-warning-soft border-warning/20 text-warning'
+                                                                : app.isSystemApp
+                                                                ? 'bg-accent-soft border-accent/20 text-accent'
+                                                                : 'bg-success-soft border-success/20 text-success'
+                                                        }`}
+                                                    >
+                                                        {isCritical ? <ShieldAlert className="w-5 h-5" /> : isCaution ? <AlertTriangle className="w-5 h-5" /> : app.isSystemApp ? <Smartphone className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                                                    </span>
+
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                                            <span className="text-[13.5px] font-semibold text-text-primary truncate">{app.name}</span>
+                                                            <span className={`text-[9.5px] font-semibold px-1.5 py-0.5 rounded border uppercase tracking-[0.08em] ${getBadgeColor(app.safetyStatus)}`}>
+                                                                {app.safetyStatus === 'risky' ? 'High risk' : app.safetyStatus === 'caution' ? 'Caution' : 'Verified Safe'}
+                                                            </span>
+                                                            {app.isSystemApp && (
+                                                                <span className="text-[9.5px] font-semibold px-1.5 py-0.5 rounded border uppercase tracking-[0.08em] bg-accent-soft text-accent border-accent/20">
+                                                                    System
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                        <div className="h-1.5 w-full bg-surface-light rounded-full overflow-hidden flex">
-                                                            <div style={{ width: `${(app.apkSize / app.storageUsed)*100}%`}} className="bg-indigo-500 h-full border-r border-[#060608]" />
-                                                            <div style={{ width: `${(app.dataSize / app.storageUsed)*100}%`}} className="bg-cyan h-full border-r border-[#060608]" />
-                                                            <div style={{ width: `${(app.cacheSize / app.storageUsed)*100}%`}} className="bg-amber-500 h-full" />
-                                                        </div>
-                                                        <p className="text-xs font-mono font-bold text-text-primary text-right">{formatSize(app.storageUsed)} Total</p>
+                                                        <p className="text-[11.5px] text-text-tertiary truncate font-mono">
+                                                            {app.packageName} · {app.dangerousPermissions} sensitive perms
+                                                        </p>
                                                     </div>
 
-                                                    {/* Safety Analysis */}
-                                                    <div className="space-y-3">
-                                                        <h4 className="text-xs font-ui font-semibold text-text-secondary uppercase">Safety Analysis</h4>
-                                                        <div className={`p-3 rounded-lg border text-xs flex items-start gap-2 ${getBadgeColor(app.safetyStatus)}`}>
-                                                            {getIcon(app.safetyStatus)}
-                                                            <span className="font-medium">{app.safetyReason}</span>
+                                                    <ChevronDown className={`w-4 h-4 text-text-tertiary shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                                </button>
+
+                                                {isExpanded && (
+                                                    <div className="px-4 pb-4 space-y-3 border-t border-border pt-4 bg-surface-1/40">
+                                                        <div className={`p-3 rounded-xl border ${getBadgeColor(app.safetyStatus)}`}>
+                                                            <p className="text-[10px] font-semibold uppercase tracking-wide mb-1 opacity-80">Security verdict</p>
+                                                            <p className="text-[12.5px] text-text-primary leading-relaxed">{app.safetyReason}</p>
+                                                            {app.signals && app.signals.length > 0 && (
+                                                                <ul className="mt-2 flex flex-wrap gap-1.5">
+                                                                    {app.signals.map((s) => (
+                                                                        <li key={s} className="text-[10px] font-medium px-2 py-0.5 rounded bg-surface-1 border border-border text-text-secondary">
+                                                                            {s}
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            )}
                                                         </div>
-                                                        <p className="text-[11px] text-text-secondary">Dangerous Permissions: <span className="font-mono text-rose-400">{app.dangerousPermissions}</span> / {app.permissions}</p>
-                                                    </div>
-
-                                                    {/* Actions */}
-                                                    <div className="space-y-2 flex flex-col justify-end">
-                                                        <button className="w-full py-2 px-3 rounded-lg bg-surface border border-border text-xs font-medium text-text-primary hover:bg-surface-light transition-colors flex items-center justify-center gap-2">
-                                                            <Activity className="w-4 h-4 text-cyan" /> Restrict Background Usage
-                                                        </button>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <button className="py-2 px-3 rounded-lg bg-surface border border-border text-xs font-medium text-text-primary hover:bg-surface-light transition-colors">
-                                                                Clear Cache
-                                                            </button>
-                                                            <button className="py-2 px-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs font-medium text-rose-500 hover:bg-rose-500/20 transition-colors flex items-center justify-center gap-2">
-                                                                <Trash2 className="w-3.5 h-3.5" /> Uninstall
-                                                            </button>
+                                                        <div className="grid grid-cols-2 gap-2 text-[12px]">
+                                                            <div className="bg-surface-2 p-2.5 rounded-lg border border-border">
+                                                                <span className="text-[10px] text-text-tertiary uppercase block">Package</span>
+                                                                <span className="font-mono text-text-primary truncate block">{app.packageName}</span>
+                                                            </div>
+                                                            <div className="bg-surface-2 p-2.5 rounded-lg border border-border">
+                                                                <span className="text-[10px] text-text-tertiary uppercase block">Permissions</span>
+                                                                <span className="text-text-primary font-medium">{app.dangerousPermissions} dangerous / {app.permissions} total</span>
+                                                            </div>
                                                         </div>
+
+                                                        {/* Trust Signals from Fake App Detector */}
+                                                        {(() => {
+                                                            const trust = trustResults.get(app.packageName || app.id)
+                                                            if (!trust) return null
+                                                            return (
+                                                                <div className={`p-3 rounded-xl border ${
+                                                                    trust.verdict === 'verified_safe' ? 'bg-success-soft/40 border-success/20'
+                                                                        : trust.verdict === 'high_risk' ? 'bg-danger-soft/40 border-danger/20'
+                                                                            : 'bg-warning-soft/40 border-warning/20'
+                                                                }`}>
+                                                                    <div className="flex items-center gap-2 mb-2">
+                                                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                                                                            trust.verdict === 'verified_safe' ? 'text-success'
+                                                                                : trust.verdict === 'high_risk' ? 'text-danger'
+                                                                                    : 'text-warning'
+                                                                        }`}>
+                                                                            {trust.verdict === 'verified_safe' ? '✅ Verified Authentic'
+                                                                                : trust.verdict === 'high_risk' ? '🚫 Fake/Clone Risk'
+                                                                                    : '⚠️ Unverified'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-[12px] text-text-secondary mb-2">{trust.label}</p>
+                                                                    <ul className="space-y-1">
+                                                                        {trust.signals.map((sig, si) => (
+                                                                            <li key={si} className="text-[11px] text-text-secondary flex items-start gap-1.5">
+                                                                                <span className="shrink-0 mt-0.5">•</span>
+                                                                                <span>{sig}</span>
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            )
+                                                        })()}
                                                     </div>
-
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
-                            )
-                        })}
-                    </div>
-                )}
-            </div>
-
-            {/* Storage Usage Bar Graphic */}
-            <div className="mt-8 pt-6 border-t border-border/50">
-                <h3 className="text-sm font-ui font-semibold text-text-secondary mb-4">Top 5 Storage Consumers</h3>
-                <div className="space-y-3">
-                    {topApps.map(app => (
-                        <div key={app.id} className="flex items-center justify-between text-xs w-full group">
-                            <div className="w-24 truncate font-medium text-text-primary group-hover:text-cyan transition-colors">{app.name}</div>
-                            <div className="flex-1 mx-4 h-2 rounded-full bg-surface overflow-hidden relative border border-border/50">
-                                <motion.div 
-                                    initial={{ width: 0 }}
-                                    whileInView={{ width: `${(app.storageUsed / (topApps[0]?.storageUsed || 1))*100}%` }}
-                                    viewport={{ once: true }}
-                                    transition={{ duration: 0.8, ease: "easeOut" }}
-                                    className="absolute left-0 top-0 h-full rounded-full"
-                                    style={{
-                                        background: `linear-gradient(to right, #4f46e5, #0ea5e9)`
-                                    }}
-                                />
-                            </div>
-                            <div className="w-16 text-right font-mono text-text-secondary">{formatSize(app.storageUsed)}</div>
+                                                )}
+                                            </li>
+                                        )
+                                    })}
+                                </ul>
+                            )}
                         </div>
-                    ))}
+                    )}
+
+                    {/* ─── TAB 2: UNWANTED / CAUTION APPS ─── */}
+                    {activeTab === 'unwanted' && (
+                        <div className="space-y-2">
+                            {harmfulApps.length === 0 ? (
+                                <div className="text-center py-10 px-4 bg-surface-2 rounded-xl border border-border">
+                                    <span className="w-12 h-12 rounded-2xl bg-success-soft flex items-center justify-center mx-auto mb-3" aria-hidden="true">
+                                        <ShieldCheck className="w-6 h-6 text-success" />
+                                    </span>
+                                    <h3 className="text-[14px] font-semibold text-text-primary mb-1">Zero Unwanted Apps Flagged</h3>
+                                    <p className="text-[12.5px] text-text-secondary max-w-sm mx-auto">
+                                        All installed applications on this device are verified safe and conform to standard permissions.
+                                    </p>
+                                </div>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {harmfulApps.map((app) => {
+                                        const isExpanded = expandedApp === app.id
+                                        const isCritical = app.safetyStatus === 'risky'
+
+                                        return (
+                                            <li
+                                                key={app.id}
+                                                className={`rounded-2xl border overflow-hidden ${
+                                                    isCritical ? 'bg-danger-soft border-danger/20' : 'bg-warning-soft border-warning/20'
+                                                }`}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExpandedApp(isExpanded ? null : app.id)}
+                                                    className="w-full p-4 flex items-center gap-3 sm:gap-4 text-left cursor-pointer hover:bg-surface-2/40 transition-colors"
+                                                >
+                                                    <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${isCritical ? 'bg-danger-soft text-danger border-danger/30' : 'bg-warning-soft text-warning border-warning/30'}`}>
+                                                        {isCritical ? <ShieldAlert className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                                                    </span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                            <span className="text-[13.5px] font-semibold text-text-primary truncate">{app.name}</span>
+                                                            <span className={`text-[9.5px] font-semibold px-1.5 py-0.5 rounded border uppercase ${getBadgeColor(app.safetyStatus)}`}>
+                                                                {isCritical ? 'High risk' : 'Caution'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11.5px] text-text-tertiary truncate font-mono">{app.packageName}</p>
+                                                    </div>
+                                                    <ChevronDown className={`w-4 h-4 text-text-tertiary shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                                </button>
+                                                {isExpanded && (
+                                                    <div className="px-4 pb-4 space-y-3 border-t border-border pt-4 bg-surface-1/40">
+                                                        <div className={`p-3 rounded-xl border ${getBadgeColor(app.safetyStatus)}`}>
+                                                            <p className="text-[10px] font-semibold uppercase tracking-wide mb-1 opacity-80">Security verdict</p>
+                                                            <p className="text-[12.5px] text-text-primary leading-relaxed">{app.safetyReason}</p>
+                                                            {app.signals && app.signals.length > 0 && (
+                                                                <ul className="mt-2 flex flex-wrap gap-1.5">
+                                                                    {app.signals.map((s) => (
+                                                                        <li key={s} className="text-[10px] font-medium px-2 py-0.5 rounded bg-surface-1 border border-border text-text-secondary">
+                                                                            {s}
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            )}
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-2 text-[12px]">
+                                                            <div className="bg-surface-2 p-2.5 rounded-lg border border-border">
+                                                                <span className="text-[10px] text-text-tertiary uppercase block">Package</span>
+                                                                <span className="font-mono text-text-primary truncate block">{app.packageName}</span>
+                                                            </div>
+                                                            <div className="bg-surface-2 p-2.5 rounded-lg border border-border">
+                                                                <span className="text-[10px] text-text-tertiary uppercase block">Permissions</span>
+                                                                <span className="text-text-primary font-medium">{app.dangerousPermissions} dangerous / {app.permissions} total</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </li>
+                                        )
+                                    })}
+                                </ul>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ─── TAB 3: VERIFIED SAFE APPS ─── */}
+                    {activeTab === 'safe' && (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between px-1 py-1">
+                                <span className="text-[11.5px] font-semibold text-success uppercase tracking-wider flex items-center gap-1.5">
+                                    <ShieldCheck className="w-3.5 h-3.5" /> Verified Safe User Apps ({safeUserApps.length})
+                                </span>
+                            </div>
+                            <ul className="space-y-2">
+                                {safeUserApps.map((app) => (
+                                    <li
+                                        key={app.id}
+                                        className="p-3.5 rounded-xl bg-surface-2 border border-border flex items-center gap-3"
+                                    >
+                                        <span className="w-9 h-9 rounded-xl bg-success-soft text-success flex items-center justify-center shrink-0 border border-success/20">
+                                            <ShieldCheck className="w-4 h-4" />
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-[13px] font-semibold text-text-primary truncate">{app.name}</p>
+                                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-success-soft text-success border border-success/20 uppercase">
+                                                    Verified Safe
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-text-tertiary truncate font-mono mt-0.5">
+                                                {app.packageName} · {app.category}
+                                            </p>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {/* ─── TAB 4: SYSTEM PACKAGES ─── */}
+                    {activeTab === 'system' && (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between px-1 py-1">
+                                <span className="text-[11.5px] font-semibold text-accent uppercase tracking-wider flex items-center gap-1.5">
+                                    <Smartphone className="w-3.5 h-3.5" /> Preinstalled System Packages ({systemApps.length})
+                                </span>
+                            </div>
+                            <ul className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+                                {systemApps.map((app) => (
+                                    <li
+                                        key={app.id}
+                                        className="p-3 rounded-xl bg-surface-2/70 border border-border flex items-center gap-3"
+                                    >
+                                        <span className="w-8 h-8 rounded-lg bg-accent-soft text-accent flex items-center justify-center shrink-0">
+                                            <Smartphone className="w-4 h-4" />
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-[12.5px] font-medium text-text-primary truncate">{app.name}</p>
+                                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-accent-soft text-accent uppercase">
+                                                    System
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-text-tertiary truncate font-mono mt-0.5">
+                                                {app.packageName}
+                                            </p>
+                                        </div>
+                                        <ShieldCheck className="w-4 h-4 text-success shrink-0" />
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
-            </div>
-        </div>
+            )}
+        </Card>
     )
 }

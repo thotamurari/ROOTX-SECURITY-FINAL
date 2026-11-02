@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { Globe } from 'lucide-react'
 import {
     ComposableMap,
@@ -7,6 +6,7 @@ import {
     Marker,
     Line,
 } from 'react-simple-maps'
+import { Card } from '@/components/shared/Card'
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 
@@ -30,21 +30,32 @@ const connections = [
     { from: [77.5946, 12.9716] as [number, number], to: [139.6917, 35.6895] as [number, number], flagged: false },
 ]
 
+const DANGER = 'var(--danger)'
+const ACCENT = 'var(--accent)'
+
 export function WorldThreatMapMini() {
     const flaggedCount = markers.filter((m) => m.flagged).length
 
     return (
-        <div className="rounded-[16px] bg-[rgba(13,13,20,0.75)] backdrop-blur-[20px] border border-[#2A2A40] overflow-hidden transition-all hover:border-[rgba(0,245,255,0.15)] hover:shadow-[0_0_24px_rgba(0,245,255,0.06)]">
-            <div className="px-5 pt-4 pb-2 flex items-center gap-2">
-                <Globe className="w-4 h-4 text-[#00F5FF]" style={{ filter: 'drop-shadow(0 0 6px #00F5FF)' }} />
-                <h3 className="text-[15px] font-sans font-semibold text-[#F0F0FF]">Global Threat Map</h3>
+        <Card padding="none" className="overflow-hidden h-full flex flex-col">
+            <div className="flex items-center gap-2 px-5 pt-4 pb-3">
+                <span className="w-7 h-7 rounded-lg bg-accent-soft text-accent flex items-center justify-center shrink-0" aria-hidden="true">
+                    <Globe className="w-3.5 h-3.5" />
+                </span>
+                <h3 className="text-[14px] font-semibold text-text-primary tracking-tight truncate">
+                    Global Threat Map
+                </h3>
             </div>
 
-            <div className="relative h-[180px] sm:h-[220px] md:h-[240px]">
+            {/* Fluid width, capped height — the projection scales with the
+                container so the map stays usable on narrow phone viewports. */}
+            <div className="relative w-full h-[180px] sm:h-[220px] md:h-[240px] border-t border-border bg-base">
                 <ComposableMap
                     projection="geoMercator"
                     projectionConfig={{ scale: 110, center: [20, 20] }}
                     style={{ width: '100%', height: '100%' }}
+                    aria-hidden="true"
+                    focusable="false"
                 >
                     <Geographies geography={GEO_URL}>
                         {({ geographies }) =>
@@ -52,12 +63,12 @@ export function WorldThreatMapMini() {
                                 <Geography
                                     key={geo.rsmKey}
                                     geography={geo}
-                                    fill="#1A1A2E"
-                                    stroke="#2A2A40"
+                                    fill="var(--bg-surface-2)"
+                                    stroke="var(--border-default)"
                                     strokeWidth={0.5}
                                     style={{
                                         default: { outline: 'none' },
-                                        hover: { fill: '#2A2A40', outline: 'none' },
+                                        hover: { fill: 'var(--bg-surface-3)', outline: 'none' },
                                         pressed: { outline: 'none' },
                                     }}
                                 />
@@ -71,10 +82,10 @@ export function WorldThreatMapMini() {
                             key={i}
                             from={conn.from}
                             to={conn.to}
-                            stroke={conn.flagged ? '#FF3366' : '#00F5FF'}
+                            stroke={conn.flagged ? DANGER : ACCENT}
                             strokeWidth={1}
                             strokeLinecap="round"
-                            style={{ strokeDasharray: '4 2', opacity: 0.6 }}
+                            style={{ strokeDasharray: '4 2', opacity: 0.55 }}
                         />
                     ))}
 
@@ -83,14 +94,13 @@ export function WorldThreatMapMini() {
                         <Marker key={i} coordinates={m.coordinates}>
                             <circle
                                 r={3.5}
-                                fill={m.flagged ? '#FF3366' : '#00F5FF'}
-                                opacity={0.9}
-                                style={{ filter: `drop-shadow(0 0 4px ${m.flagged ? '#FF3366' : '#00F5FF'})` }}
+                                fill={m.flagged ? DANGER : ACCENT}
+                                opacity={0.95}
                             />
                             <circle
                                 r={7}
                                 fill="none"
-                                stroke={m.flagged ? '#FF3366' : '#00F5FF'}
+                                stroke={m.flagged ? DANGER : ACCENT}
                                 strokeWidth={1}
                                 opacity={0.3}
                                 className="animate-[map-ping_2s_ease-out_infinite]"
@@ -101,13 +111,21 @@ export function WorldThreatMapMini() {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-5 py-3 border-t border-[#1E1E30]">
-                <span className="text-[11px] font-mono text-[#8888AA]">{markers.length} connections</span>
-                <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#FF3366] animate-[live-pulse_1.5s_ease-in-out_infinite]" />
-                    <span className="text-[11px] font-mono font-semibold text-[#FF3366]">{flaggedCount} flagged</span>
-                </div>
+            <div className="flex items-center justify-between px-5 py-3 border-t border-border mt-auto">
+                <span className="text-[11.5px] text-text-secondary tabular-nums">
+                    {markers.length} connections
+                </span>
+                <span className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-danger animate-pulse" aria-hidden="true" />
+                    <span className="text-[11.5px] font-semibold text-danger tabular-nums">
+                        {flaggedCount} flagged
+                    </span>
+                </span>
             </div>
-        </div>
+
+            <span className="sr-only">
+                Global threat map: {markers.length} monitored connections, {flaggedCount} flagged as malicious.
+            </span>
+        </Card>
     )
 }

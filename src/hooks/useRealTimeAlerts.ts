@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { getSocket } from '@/services/socket'
+import { useAuthStore } from '@/stores/authStore'
 import toast from 'react-hot-toast'
 import type { ThreatDetectedEvent, BehaviorAnomalyEvent } from '@/types/api'
 
@@ -35,12 +36,22 @@ export function useRealTimeAlerts() {
             )
         }
 
+        const onUserUpdated = (data: { userId: string; email: string }) => {
+            const currentUser = useAuthStore.getState().user
+            if (currentUser && (!data.userId || data.userId === currentUser.id)) {
+                useAuthStore.getState().setUser({ ...currentUser, email: data.email })
+                toast.success(`Account email synchronized: ${data.email}`, { icon: '🔄' })
+            }
+        }
+
         socket.on('threat:detected', onThreatDetected)
         socket.on('behavior:anomaly', onBehaviorAnomaly)
+        socket.on('user:updated', onUserUpdated)
 
         return () => {
             socket.off('threat:detected', onThreatDetected)
             socket.off('behavior:anomaly', onBehaviorAnomaly)
+            socket.off('user:updated', onUserUpdated)
         }
     }, [])
 }

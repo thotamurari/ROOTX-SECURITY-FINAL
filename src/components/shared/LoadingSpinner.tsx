@@ -10,23 +10,23 @@ export function LoadingSpinner({ size = 'md', text }: Props) {
     const s = sizeMap[size]
 
     return (
-        <div className="flex flex-col items-center justify-center gap-4 py-12">
+        <div className="flex flex-col items-center justify-center gap-4 py-12" role="status" aria-live="polite">
             <div className="relative" style={{ width: s, height: s }}>
                 {/* Outer ring */}
                 <motion.div
-                    className="absolute inset-0 rounded-full border-2 border-cyan/20"
+                    className="absolute inset-0 rounded-full border-2 border-accent/20"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
                 />
                 {/* Inner sweep */}
                 <motion.div
-                    className="absolute inset-1 rounded-full border-2 border-transparent border-t-cyan"
+                    className="absolute inset-1 rounded-full border-2 border-transparent border-t-accent"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
                 />
                 {/* Center dot */}
                 <motion.div
-                    className="absolute inset-0 m-auto w-2 h-2 rounded-full bg-cyan"
+                    className="absolute inset-0 m-auto w-2 h-2 rounded-full bg-accent"
                     animate={{ opacity: [0.4, 1, 0.4], scale: [0.8, 1.2, 0.8] }}
                     transition={{ duration: 2, repeat: Infinity }}
                 />
@@ -40,6 +40,7 @@ export function LoadingSpinner({ size = 'md', text }: Props) {
                     {text}
                 </motion.p>
             )}
+            <span className="sr-only">{text || 'Loading'}</span>
         </div>
     )
 }

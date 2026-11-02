@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { BehaviorProfile } from '@/types/api'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 interface Props {
     profile: BehaviorProfile
@@ -28,14 +29,34 @@ const KEYS: (keyof BehaviorProfile['baseline'])[] = [
     'paymentActivity',
 ]
 
+/**
+ * Canvas can't resolve `var(--token)` the way SVG/CSS can, so we read the
+ * design-system custom properties off <html> at draw time. This keeps the
+ * radar on the same semantic palette as the rest of the app and makes it
+ * re-theme correctly when the user flips between light and dark.
+ */
+function readToken(name: string, fallback: string): string {
+    if (typeof window === 'undefined') return fallback
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    return value || fallback
+}
+
 export function BehavioralRadarChart({ profile, size = 320 }: Props) {
     const canvasRef = useRef<HTMLCanvasElement>(null)
+    // Redraw trigger only — the theme flag drives which token values we read.
+    const darkMode = useSettingsStore((s) => s.darkMode)
 
     useEffect(() => {
         const canvas = canvasRef.current
         if (!canvas) return
         const ctx = canvas.getContext('2d')
         if (!ctx) return
+
+        const gridColor = readToken('--border-default', 'rgba(255,255,255,0.10)')
+        const axisColor = readToken('--border-subtle', 'rgba(255,255,255,0.06)')
+        const labelColor = readToken('--text-tertiary', '#6B7280')
+        const baselineColor = readToken('--accent', '#3b82f6')
+        const todayColor = readToken('--danger', '#f5473d')
 
         const dpr = window.devicePixelRatio || 1
         canvas.width = size * dpr
@@ -61,7 +82,7 @@ export function BehavioralRadarChart({ profile, size = 320 }: Props) {
                 j === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
             }
             ctx.closePath()
-            ctx.strokeStyle = '#1E1E30'
+            ctx.strokeStyle = gridColor
             ctx.lineWidth = 1
             ctx.stroke()
         }
@@ -74,15 +95,15 @@ export function BehavioralRadarChart({ profile, size = 320 }: Props) {
             ctx.beginPath()
             ctx.moveTo(cx, cy)
             ctx.lineTo(x, y)
-            ctx.strokeStyle = '#1E1E3050'
+            ctx.strokeStyle = axisColor
             ctx.lineWidth = 0.5
             ctx.stroke()
 
             // Label
             const lx = cx + Math.cos(angle) * (maxR + 18)
             const ly = cy + Math.sin(angle) * (maxR + 18)
-            ctx.font = '10px "DM Sans", sans-serif'
-            ctx.fillStyle = '#8888AA'
+            ctx.font = '600 10px Inter, -apple-system, sans-serif'
+            ctx.fillStyle = labelColor
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
             ctx.fillText(LABELS[i] ?? '', lx, ly)
@@ -128,24 +149,39 @@ export function BehavioralRadarChart({ profile, size = 320 }: Props) {
         }
 
         // Baseline
-        drawArea(profile.baseline, '#00F5FF15', '#00F5FF', 0.15)
+        drawArea(profile.baseline, baselineColor, baselineColor, 0.15)
         // Today
-        drawArea(profile.today, '#FF336620', '#FF3366', 0.2)
-    }, [profile, size])
+        drawArea(profile.today, todayColor, todayColor, 0.2)
+    }, [profile, size, darkMode])
+
+    // Screen-reader alternative to the canvas: the same numbers as plain text.
+    const summary = KEYS.map(
+        (key, i) => `${LABELS[i]}: baseline ${profile.baseline[key]}, today ${profile.today[key]}`
+    ).join('; ')
 
     return (
-        <div className="flex flex-col items-center">
-            <canvas ref={canvasRef} style={{ width: size, height: size }} />
-            <div className="flex items-center gap-6 mt-4">
-                <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-cyan" />
-                    <span className="text-xs font-body text-text-secondary">Baseline</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-neon-red" />
-                    <span className="text-xs font-body text-text-secondary">Today</span>
-                </div>
-            </div>
+        <div className="flex flex-col items-center w-full">
+            {/* Responsive: the canvas keeps its square drawing space but scales
+                down to the container on narrow viewports instead of forcing a
+                fixed pixel width. */}
+            <canvas
+                ref={canvasRef}
+                role="img"
+                aria-label={`Behavioral radar chart comparing baseline and today across eight signals. ${summary}.`}
+                className="w-full h-auto"
+                style={{ maxWidth: size, aspectRatio: '1 / 1' }}
+            />
+
+            <ul className="flex items-center justify-center gap-5 mt-4 flex-wrap">
+                <li className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-accent shrink-0" aria-hidden="true" />
+                    <span className="text-[12px] text-text-secondary">Baseline</span>
+                </li>
+                <li className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-danger shrink-0" aria-hidden="true" />
+                    <span className="text-[12px] text-text-secondary">Today</span>
+                </li>
+            </ul>
         </div>
     )
 }

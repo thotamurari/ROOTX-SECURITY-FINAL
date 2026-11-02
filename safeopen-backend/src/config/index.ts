@@ -1,5 +1,5 @@
 import dotenv from 'dotenv'
-dotenv.config()
+dotenv.config({ override: true })
 
 export const config = {
     port: parseInt(process.env.PORT || '3000', 10),
@@ -8,9 +8,23 @@ export const config = {
     // Supabase
     supabaseUrl: process.env.SUPABASE_URL || '',
     supabaseKey: process.env.SUPABASE_ANON_KEY || '',
+    // Service-role key: required now that auth is verified via Firebase Admin
+    // (see utils/firebaseAdmin.ts) rather than Supabase Auth. There is no
+    // Supabase session on these requests, so RLS policies keyed on
+    // auth.uid() can never match — the backend must use the service-role
+    // key to read/write on behalf of the Firebase-authenticated user and is
+    // itself responsible for scoping every query by req.userId.
+    // Get this from: Supabase Dashboard → Project Settings → API → service_role secret.
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 
-    // Redis
-    redisUrl: process.env.REDIS_URL || '',
+    // Firebase Admin (server-side ID token verification)
+    // Get these from: Firebase Console → Project Settings → Service Accounts
+    // → Generate new private key (downloads a JSON file with these 3 fields).
+    firebaseProjectId: process.env.FIREBASE_PROJECT_ID || '',
+    firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+    // Private keys in .env files usually have literal "\n" sequences instead
+    // of real newlines — normalize them when read.
+    firebasePrivateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
 
     // JWT
     jwtSecret: process.env.JWT_SECRET || 'fallback-secret',
@@ -18,11 +32,15 @@ export const config = {
     refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
 
     // External APIs
-    virusTotalApiKey: process.env.VIRUSTOTAL_API_KEY || '',
+    virusTotalApiKey: process.env.VIRUSTOTAL_API_KEY || '62275c8e069a38f816e15a93317e19556509509ec74b5218dd6eec84f70b23e1',
     urlScanApiKey: process.env.URLSCAN_API_KEY || '',
     securityTrailsApiKey: process.env.SECURITYTRAILS_API_KEY || '',
     abuseIpdbApiKey: process.env.ABUSEIPDB_API_KEY || '',
     openaiApiKey: process.env.OPENAI_API_KEY || '',
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+    // Gemini powers RootX-AI chat and the Gemini URL-scan verdict. Server-only;
+    // never exposed to the web or Android client.
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
     maxmindLicenseKey: process.env.MAXMIND_LICENSE_KEY || '',
 
     // AWS S3

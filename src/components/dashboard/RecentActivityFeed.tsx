@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion'
 import { useRiskScore } from '@/hooks/useRiskScore'
-import { Clock, ExternalLink } from 'lucide-react'
+import { Clock, ExternalLink, Scan } from 'lucide-react'
 import type { ScanResult } from '@/types/api'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { Scan } from 'lucide-react'
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/shared/Card'
 
 interface Props {
     items: ScanResult[]
@@ -24,60 +24,80 @@ function ActivityItem({ item, index }: { item: ScanResult; index: number }) {
 
     return (
         <motion.div
-            className="flex items-center gap-4 p-[14px] px-4 rounded-[12px] group cursor-pointer relative overflow-hidden transition-all duration-200"
-            style={{
-                background: 'rgba(17, 24, 39, 0.8)',
-                border: '1px solid rgba(255,255,255,0.05)',
-            }}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            whileHover={{ 
-                x: 4, 
-                backgroundColor: 'rgba(0, 255, 255, 0.04)',
-                borderColor: 'rgba(0, 255, 255, 0.15)' 
-            }}
-            transition={{ delay: index * 0.05 }}
+            className="group relative flex items-center gap-3 sm:gap-4 pl-4 pr-3 py-3 rounded-xl overflow-hidden bg-surface-2 border border-border transition-colors duration-200 hover:border-border-strong hover:bg-surface-3"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05, duration: 0.25, ease: 'easeOut' }}
         >
-            {/* Left colored border */}
-            <div 
-                className="absolute left-0 top-0 bottom-0 w-1" 
-                style={{ backgroundColor: risk.color, boxShadow: `0 0 10px ${risk.color}` }} 
+            {/* Risk accent rail */}
+            <span
+                className="absolute left-0 top-0 bottom-0 w-1"
+                style={{ backgroundColor: risk.color }}
+                aria-hidden="true"
             />
 
-            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${risk.color}1A` }}>
-                <RiskIcon className="w-5 h-5 drop-shadow-md" style={{ color: risk.color, filter: `drop-shadow(0 0 4px ${risk.color})` }} />
-            </div>
+            <span
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ backgroundColor: `${risk.color}1A`, color: risk.color }}
+                aria-hidden="true"
+            >
+                <RiskIcon className="w-[18px] h-[18px]" />
+            </span>
+
             <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-mono font-medium text-white truncate">{item.input}</p>
-                <div className="flex items-center gap-3 mt-1.5">
-                    <span className={risk.badgeClass}>{risk.label}</span>
-                    <span className="text-[12px] text-[#607D8B] font-mono flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5" />
+                <p className="text-[13px] font-mono font-medium text-text-primary truncate">{item.input}</p>
+                <div className="flex items-center gap-2.5 mt-1.5">
+                    <span
+                        className="px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-[0.1em]"
+                        style={{
+                            color: risk.color,
+                            backgroundColor: `${risk.color}1A`,
+                            border: `1px solid ${risk.color}33`,
+                        }}
+                    >
+                        {risk.label}
+                    </span>
+                    <span className="text-[11.5px] text-text-tertiary flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" aria-hidden="true" />
                         {timeAgo(item.scannedAt)}
                     </span>
                 </div>
             </div>
-            <ExternalLink className="w-5 h-5 text-[#607D8B] opacity-0 group-hover:opacity-100 transition-opacity" />
+
+            <ExternalLink
+                className="w-4 h-4 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                aria-hidden="true"
+            />
         </motion.div>
     )
 }
 
 export function RecentActivityFeed({ items }: Props) {
     if (!items.length) {
-        return <EmptyState icon={Scan} title="No scans yet" message="Start scanning to see activity here." />
+        return (
+            <Card padding="none">
+                <EmptyState icon={Scan} title="No scans yet" message="Start scanning to see activity here." />
+            </Card>
+        )
     }
 
     return (
-        <div className="p-5 rounded-[16px] bg-[linear-gradient(135deg,rgba(17,24,39,0.95)_0%,rgba(13,17,23,0.90)_100%)] backdrop-blur-[20px] border border-cyan/15 shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
-            <div className="mb-4">
-                <h3 className="text-[20px] font-sans font-bold text-white leading-none">Recent Activity</h3>
-                <div className="w-10 h-[3px] bg-cyan rounded-[2px] shadow-[0_0_8px_#00FFFF] mt-1" />
-            </div>
-            <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1 select-none">
+        <Card>
+            <CardHeader className="mb-4 items-start">
+                <div className="min-w-0">
+                    <CardTitle>Recent Activity</CardTitle>
+                    <CardDescription>Your latest scan results</CardDescription>
+                </div>
+                <span className="text-[11px] font-medium text-text-tertiary shrink-0 tabular-nums">
+                    {items.length} total
+                </span>
+            </CardHeader>
+
+            <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
                 {items.slice(0, 5).map((item, i) => (
                     <ActivityItem key={item.id} item={item} index={i} />
                 ))}
             </div>
-        </div>
+        </Card>
     )
 }
