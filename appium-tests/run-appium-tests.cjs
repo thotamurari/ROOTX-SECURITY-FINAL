@@ -9,3 +9,4 @@ try {
     console.error('Error running Appium test suite:', error);
     process.exit(1);
 }
+

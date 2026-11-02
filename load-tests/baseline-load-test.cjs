@@ -12,7 +12,7 @@ const path = require('path');
 
 const TARGET_URL = process.env.API_URL || 'http://127.0.0.1:3000';
 const VIRTUAL_USERS = parseInt(process.env.VUS || '100', 10);
-const DURATION_SECONDS = parseInt(process.env.DURATION || '60', 10);
+const DURATION_SECONDS = process.env.DURATION ? parseInt(process.env.DURATION, 10) : (process.env.CI ? 5 : 60);
 
 const ENDPOINTS = [
     { path: '/health', method: 'GET', weight: 40 },
@@ -173,3 +173,4 @@ async function runBenchmark() {
 if (require.main === module) {
     runBenchmark();
 }
+

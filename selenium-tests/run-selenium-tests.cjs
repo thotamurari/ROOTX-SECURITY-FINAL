@@ -10,3 +10,4 @@ try {
     console.error('Error running Selenium test suite:', error);
     process.exit(1);
 }
+

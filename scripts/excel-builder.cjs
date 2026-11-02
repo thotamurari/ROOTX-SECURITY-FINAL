@@ -1,6 +1,99 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const zlib = require('zlib');
+
+// Standard CRC32 implementation
+const crcTable = new Uint32Array(256);
+for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+        c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    crcTable[i] = c >>> 0;
+}
+
+function calculateCrc32(buf) {
+    let crc = 0 ^ (-1);
+    for (let i = 0; i < buf.length; i++) {
+        crc = (crc >>> 8) ^ crcTable[(crc ^ buf[i]) & 0xFF];
+    }
+    return (crc ^ (-1)) >>> 0;
+}
+
+function createZipBuffer(entries) {
+    const localHeaders = [];
+    const centralHeaders = [];
+    let offset = 0;
+
+    for (const entry of entries) {
+        const nameBuf = Buffer.from(entry.name.replace(/\\/g, '/'), 'utf8');
+        const rawData = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(entry.data, 'utf8');
+        const uncompressedSize = rawData.length;
+        const crc = calculateCrc32(rawData);
+
+        // Compress using deflateRaw
+        const compressedData = zlib.deflateRawSync(rawData, { level: 6 });
+        const compressedSize = compressedData.length;
+
+        // Local File Header (30 bytes + nameBuf.length)
+        const localHeader = Buffer.alloc(30 + nameBuf.length);
+        localHeader.writeUInt32LE(0x04034b50, 0); // signature
+        localHeader.writeUInt16LE(20, 4);         // version needed: 2.0
+        localHeader.writeUInt16LE(0, 6);          // flags
+        localHeader.writeUInt16LE(8, 8);          // compression method: deflate
+        localHeader.writeUInt16LE(0, 10);         // time
+        localHeader.writeUInt16LE(0, 12);         // date
+        localHeader.writeUInt32LE(crc, 14);       // crc32
+        localHeader.writeUInt32LE(compressedSize, 18);   // comp size
+        localHeader.writeUInt32LE(uncompressedSize, 22); // uncomp size
+        localHeader.writeUInt16LE(nameBuf.length, 26);   // filename length
+        localHeader.writeUInt16LE(0, 28);         // extra field length
+        nameBuf.copy(localHeader, 30);
+
+        localHeaders.push(localHeader, compressedData);
+
+        // Central Directory Header (46 bytes + nameBuf.length)
+        const centralHeader = Buffer.alloc(46 + nameBuf.length);
+        centralHeader.writeUInt32LE(0x02014b50, 0); // signature
+        centralHeader.writeUInt16LE(20, 4);          // version made by
+        centralHeader.writeUInt16LE(20, 6);          // version needed
+        centralHeader.writeUInt16LE(0, 8);           // flags
+        centralHeader.writeUInt16LE(8, 10);          // compression: deflate
+        centralHeader.writeUInt16LE(0, 12);          // time
+        centralHeader.writeUInt16LE(0, 14);          // date
+        centralHeader.writeUInt32LE(crc, 16);        // crc32
+        centralHeader.writeUInt32LE(compressedSize, 20);
+        centralHeader.writeUInt32LE(uncompressedSize, 24);
+        centralHeader.writeUInt16LE(nameBuf.length, 28);
+        centralHeader.writeUInt16LE(0, 30);          // extra len
+        centralHeader.writeUInt16LE(0, 32);          // comment len
+        centralHeader.writeUInt16LE(0, 34);          // disk num start
+        centralHeader.writeUInt16LE(0, 36);          // internal attrs
+        centralHeader.writeUInt32LE(0, 38);          // external attrs
+        centralHeader.writeUInt32LE(offset, 42);     // relative offset of local header
+        nameBuf.copy(centralHeader, 46);
+
+        centralHeaders.push(centralHeader);
+        offset += localHeader.length + compressedData.length;
+    }
+
+    const centralDirOffset = offset;
+    let centralDirSize = 0;
+    for (const ch of centralHeaders) centralDirSize += ch.length;
+
+    // End of Central Directory Record (22 bytes)
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0);           // signature
+    eocd.writeUInt16LE(0, 4);                     // disk number
+    eocd.writeUInt16LE(0, 6);                     // disk with start of central dir
+    eocd.writeUInt16LE(entries.length, 8);        // total entries on this disk
+    eocd.writeUInt16LE(entries.length, 10);       // total entries
+    eocd.writeUInt32LE(centralDirSize, 12);       // size of central dir
+    eocd.writeUInt32LE(centralDirOffset, 16);     // offset of central dir
+    eocd.writeUInt16LE(0, 20);                    // comment length
+
+    return Buffer.concat([...localHeaders, ...centralHeaders, eocd]);
+}
 
 function escapeXml(str) {
     if (str === null || str === undefined) return '';
@@ -28,10 +121,7 @@ function createWorkbook(sheets, outputPath) {
         fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    const tempDir = path.join(outputDir, 'temp_xlsx_' + Date.now() + '_' + Math.floor(Math.random() * 10000));
-    fs.mkdirSync(path.join(tempDir, '_rels'), { recursive: true });
-    fs.mkdirSync(path.join(tempDir, 'xl', '_rels'), { recursive: true });
-    fs.mkdirSync(path.join(tempDir, 'xl', 'worksheets'), { recursive: true });
+    const entries = [];
 
     // 1. [Content_Types].xml
     let contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -45,14 +135,14 @@ function createWorkbook(sheets, outputPath) {
         contentTypes += `  <Override PartName="/xl/worksheets/sheet${idx + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\n`;
     });
     contentTypes += `</Types>`;
-    fs.writeFileSync(path.join(tempDir, '[Content_Types].xml'), contentTypes, 'utf8');
+    entries.push({ name: '[Content_Types].xml', data: contentTypes });
 
     // 2. _rels/.rels
     const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
 </Relationships>`;
-    fs.writeFileSync(path.join(tempDir, '_rels', '.rels'), rootRels, 'utf8');
+    entries.push({ name: '_rels/.rels', data: rootRels });
 
     // 3. xl/workbook.xml
     let workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -63,7 +153,7 @@ function createWorkbook(sheets, outputPath) {
     });
     workbookXml += `  </sheets>
 </workbook>`;
-    fs.writeFileSync(path.join(tempDir, 'xl', 'workbook.xml'), workbookXml, 'utf8');
+    entries.push({ name: 'xl/workbook.xml', data: workbookXml });
 
     // 4. xl/_rels/workbook.xml.rels
     let wbRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -73,9 +163,9 @@ function createWorkbook(sheets, outputPath) {
     });
     wbRels += `  <Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`;
-    fs.writeFileSync(path.join(tempDir, 'xl', '_rels', 'workbook.xml.rels'), wbRels, 'utf8');
+    entries.push({ name: 'xl/_rels/workbook.xml.rels', data: wbRels });
 
-    // 5. xl/styles.xml (styled headers, clean fonts)
+    // 5. xl/styles.xml
     const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <fonts count="3">
@@ -107,7 +197,7 @@ function createWorkbook(sheets, outputPath) {
     <xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1"/>
   </cellXfs>
 </styleSheet>`;
-    fs.writeFileSync(path.join(tempDir, 'xl', 'styles.xml'), stylesXml, 'utf8');
+    entries.push({ name: 'xl/styles.xml', data: stylesXml });
 
     // 6. Worksheets
     sheets.forEach((sheet, sIdx) => {
@@ -133,17 +223,12 @@ function createWorkbook(sheets, outputPath) {
 
         sheetXml += `  </sheetData>
 </worksheet>`;
-        fs.writeFileSync(path.join(tempDir, 'xl', 'worksheets', `sheet${sIdx + 1}.xml`), sheetXml, 'utf8');
+        entries.push({ name: `xl/worksheets/sheet${sIdx + 1}.xml`, data: sheetXml });
     });
 
-    const tempZip = absOutputPath.replace(/\.xlsx$/i, '.zip');
-    if (fs.existsSync(tempZip)) fs.unlinkSync(tempZip);
-    if (fs.existsSync(absOutputPath)) fs.unlinkSync(absOutputPath);
-
-    execSync(`powershell -NoProfile -Command "Compress-Archive -Path '${tempDir}\\*' -DestinationPath '${tempZip}' -Force; Move-Item -Path '${tempZip}' -Destination '${absOutputPath}' -Force"`);
-
-    fs.rmSync(tempDir, { recursive: true, force: true });
-    console.log(`Generated: ${absOutputPath}`);
+    const zipBuffer = createZipBuffer(entries);
+    fs.writeFileSync(absOutputPath, zipBuffer);
+    console.log(`Generated (Pure Node.js OpenXML): ${absOutputPath}`);
 }
 
 module.exports = { createWorkbook };

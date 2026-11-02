@@ -107,3 +107,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const runner = new AppiumMobileTestRunner();
     runner.executeMobileSuite();
 }
+

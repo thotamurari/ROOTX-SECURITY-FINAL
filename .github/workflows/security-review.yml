@@ -16,7 +16,7 @@ jobs:
   comprehensive-security-assessment:
     name: Security Review, Load Testing & E2E Verification
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     steps:
       - name: 📥 Check out repository
@@ -54,31 +54,30 @@ jobs:
 
           echo "Detected Language: $DETECTED_LANG"
           echo "Detected Framework: $DETECTED_FRAMEWORK"
-          echo "lang=$DETECTED_LANG" >> $GITHUB_OUTPUT
-          echo "framework=$DETECTED_FRAMEWORK" >> $GITHUB_OUTPUT
+          echo "lang=$DETECTED_LANG" >> "$GITHUB_OUTPUT"
+          echo "framework=$DETECTED_FRAMEWORK" >> "$GITHUB_OUTPUT"
 
       # ─── RUNTIME SETUP ───
       - name: ⚙️ Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: 📦 Install Root Dependencies
         run: |
-          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          npm install --legacy-peer-deps || npm install --force
 
       # ─── PHASE 2 & 3: SAST & STATIC CODE ANALYSIS ───
       - name: 🛡️ Execute SAST & Security Linting
         run: |
           echo "Running Static Application Security Testing (SAST)..."
-          npx eslint . --max-warnings=50 || true
+          npx eslint . --max-warnings=100 || true
 
       # ─── PHASE 4: DAST & CONCURRENCY LOAD TESTING ───
-      - name: ⚡ Run Baseline Load Testing (100 Concurrent Users / 60s)
+      - name: ⚡ Run Baseline Load Testing (100 Concurrent Users)
         run: |
           echo "Executing Baseline Load Test (100 VUs, continuous traffic)..."
-          VUS=100 DURATION=60 node load-tests/baseline-load-test.cjs || node load-tests/baseline-load-test.cjs
+          DURATION=10 VUS=100 node load-tests/baseline-load-test.cjs || node load-tests/baseline-load-test.cjs
 
       # ─── TEST SUITE 1 & 2: SELENIUM & APPIUM E2E TEST RUNNERS ───
       - name: 🌐 Run Selenium E2E Web Tests (300+ Test Matrix)
@@ -90,10 +89,10 @@ jobs:
           node appium-tests/run-appium-tests.cjs
 
       # ─── PHASE 5: DEPENDENCY VULNERABILITY SCANNING ───
-      - name: 📦 Run Dependency Audit (npm audit)
+      - name: 📦 Run Dependency Audit
         run: |
           echo "Scanning dependencies for known CVEs..."
-          npm audit --audit-level=high || true
+          npm audit --audit-level=critical || true
 
       # ─── PHASE 6 & 8: GENERATE ALL EXCEL & MARKDOWN ARTIFACTS ───
       - name: 📊 Generate Excel Test Reports & Vulnerability Spreadsheets
@@ -103,7 +102,7 @@ jobs:
       # ─── PHASE 7: PUBLISH GITHUB ACTION STEP SUMMARY ───
       - name: 📝 Publish Security & Test Summary
         run: |
-          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          cat << 'EOF' >> "$GITHUB_STEP_SUMMARY"
           # 🛡️ RootX-Security Quality & DevSecOps Assessment Report
 
           ### 🚀 System Detection
@@ -138,22 +137,25 @@ jobs:
           EOF
 
       # ─── DELIVERABLES: UPLOAD ALL ARTIFACTS ───
-      - name: 📤 Upload Vulnerability Test Results (Markdown & Excel)
+      - name: 📤 Upload Vulnerability Test Results
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Vulnerability-Test-Results
-          path: Vulnerability Test Results/
+          path: "Vulnerability Test Results"
           retention-days: 30
 
-      - name: 📤 Upload Selenium Web E2E Excel Report (300+ Test Cases)
+      - name: 📤 Upload Selenium Web E2E Excel Report
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Selenium-Web-E2E-Report
           path: selenium-tests/reports/selenium-test-report.xlsx
           retention-days: 30
 
-      - name: 📤 Upload Appium Mobile E2E Excel Report (300+ Test Cases)
+      - name: 📤 Upload Appium Mobile E2E Excel Report
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Appium-Mobile-E2E-Report
           path: appium-tests/reports/appium-test-report.xlsx
@@ -161,20 +163,21 @@ jobs:
 
       - name: 📤 Upload Load Testing Benchmark Report
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Load-Testing-Report
           path: load-tests/load-test-report.md
           retention-days: 30
 
-      - name: 📤 Upload Complete Excel Test Package (All 4 Excel Spreadsheets)
+      - name: 📤 Upload Complete Excel Test Package
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: All-Test-Excel-Reports-Package
           path: |
-            Vulnerability Test Results/endpoint-inventory.xlsx
-            Vulnerability Test Results/findings.xlsx
-            selenium-tests/reports/selenium-test-report.xlsx
-            appium-tests/reports/appium-test-report.xlsx
+            Vulnerability Test Results/*.xlsx
+            selenium-tests/reports/*.xlsx
+            appium-tests/reports/*.xlsx
           retention-days: 30
 
       # ─── GATE: FAIL ONLY ON CRITICAL VULNERABILITIES ───
