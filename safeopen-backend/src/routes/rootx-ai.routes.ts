@@ -3,6 +3,7 @@ import { optionalAuth, type AuthRequest } from '../middleware/auth.js'
 import { supabase } from '../utils/supabase.js'
 import { userScansMemoryStore } from './scan.routes.js'
 import { retrieveSecurityKnowledge, formatKnowledgeForPrompt } from '../services/rootx-ai/knowledgeBase.js'
+import { config } from '../config/index.js'
 import https from 'https'
 
 const router = express.Router()
@@ -594,7 +595,7 @@ router.post('/chat', optionalAuth, async (req: AuthRequest, res: any) => {
       : ''
     const context = `${realDevice}${rich.context}`.trim() || 'No device data available yet.'
 
-    const geminiKey = process.env.GEMINI_API_KEY
+    const geminiKey = config.geminiApiKey || process.env.GEMINI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY
     const openaiKey = process.env.OPENAI_API_KEY
 
@@ -878,7 +879,7 @@ router.post('/message', optionalAuth, async (req: AuthRequest, res: any) => {
       : ''
     const context = `${realDevice}${rich.context}`.trim() || 'No device data available yet.'
 
-    const geminiKey = process.env.GEMINI_API_KEY
+    const geminiKey = config.geminiApiKey || process.env.GEMINI_API_KEY
     const now = new Date()
     const timeStr = now.toLocaleTimeString('en-IN', {
       hour: '2-digit', minute: '2-digit', second: '2-digit',

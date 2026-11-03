@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDfGp-JA31ECvluaJJmOCaXNPto3H3zgpo"
+          "current_key": "YOUR_GEMINI_FIREBASE_API_KEY"
         }
       ],
       "services": {
